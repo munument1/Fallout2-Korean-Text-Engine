@@ -1,0 +1,11 @@
+LIBRARY fallout2font
+EXPORTS
+ InitFont
+ ClearFont
+ SelectFont
+ GetTextWidth
+ GetTextHeight
+ TextOutput
+ TextOutputL
+ TextOutputX
+ SplitText

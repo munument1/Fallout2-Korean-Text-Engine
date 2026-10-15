@@ -1,0 +1,191 @@
+{
+  "profile_revision": 2,
+  "font_profile": {
+    "TEXT": {
+      "Name": "Galmuri9",
+      "Size": 10,
+      "Weight": 400
+    },
+    "BUTTON": {
+      "Name": "Galmuri11",
+      "Size": 14,
+      "Weight": 600
+    }
+  },
+  "sfall": "official 4.5.1 unchanged",
+  "original_installations": "key source file hashes unchanged in local verification",
+  "scope": "selected user-checked classic x86 screens, official sfall 4.5.1; no upstream mod upgrades or CE claim",
+  "nevada_note": "First launch failure reported before menu; same configuration retry displayed normally and logged New Game start. Cause undetermined.",
+  "coverage_note": "User-observed selected screens only; no exhaustive UI or long-play claim. Sonora feedback explicitly confirms menu alignment and button size/weight; individual dialogue coverage was not enumerated.",
+  "cases": [
+    {
+      "mod": "rpu",
+      "exe": "fallout2.exe",
+      "exe_sha256": "151e99194ac403bd8cc188a2f10b5ef994ffe496fb925b1a4c1b7f8fa73f634e",
+      "official_sfall_unchanged": true,
+      "sfall_sha256": "02469e78c6132010946612ec17cf4bd087aafa85a4485767fae7fba3a4151d24",
+      "adapter_sha256": "70c8b352e42c30dcadd19e4cf350e0661772874fe840a9afe6306e6929e3f02f",
+      "approved_button_profile": {
+        "Name": "Galmuri11",
+        "Size": 14,
+        "Weight": 600
+      },
+      "encoding": {
+        "cp949_or_ascii": 1323,
+        "utf8_converted": 0,
+        "other": 0
+      },
+      "custom_changed_bytes": 0,
+      "resources": null,
+      "status": "checked screens passed; missing Korean BIO supplemented; user confirmed BIO and menu Korean",
+      "runtime_checks": {
+        "CP949_break_active": true,
+        "CJK_signature": true,
+        "legacy_caption_patch": true,
+        "legacy_CP949_95_patch": true,
+        "official_sfall_file_unchanged": true,
+        "TextOutA_adapter_target": true,
+        "GetTextExtentPoint32A_adapter_target": true,
+        "CreateFontA_adapter_target": true
+      }
+    },
+    {
+      "mod": "ettu",
+      "exe": "Fallout2.exe",
+      "exe_sha256": "151e99194ac403bd8cc188a2f10b5ef994ffe496fb925b1a4c1b7f8fa73f634e",
+      "official_sfall_unchanged": true,
+      "sfall_sha256": "02469e78c6132010946612ec17cf4bd087aafa85a4485767fae7fba3a4151d24",
+      "adapter_sha256": "70c8b352e42c30dcadd19e4cf350e0661772874fe840a9afe6306e6929e3f02f",
+      "approved_button_profile": {
+        "Name": "Galmuri11",
+        "Size": 14,
+        "Weight": 600
+      },
+      "encoding": {
+        "cp949_or_ascii": 1661,
+        "utf8_converted": 85,
+        "other": 149
+      },
+      "custom_changed_bytes": 0,
+      "resources": null,
+      "status": "initial checked text screens and final menu layout/font accepted; user closed game",
+      "runtime_checks": {
+        "CP949_break_active": true,
+        "CJK_signature": true,
+        "legacy_caption_patch": true,
+        "legacy_CP949_95_patch": true,
+        "official_sfall_file_unchanged": true,
+        "TextOutA_adapter_target": true,
+        "GetTextExtentPoint32A_adapter_target": true,
+        "CreateFontA_adapter_target": true
+      }
+    },
+    {
+      "mod": "sonora",
+      "exe": "FSonoraDLC.exe",
+      "exe_sha256": "7911421d5f96891a4c7889551c4ee400f6d885da76ee5ee61e4bdf52d1423dfa",
+      "official_sfall_unchanged": true,
+      "sfall_sha256": "02469e78c6132010946612ec17cf4bd087aafa85a4485767fae7fba3a4151d24",
+      "adapter_sha256": "70c8b352e42c30dcadd19e4cf350e0661772874fe840a9afe6306e6929e3f02f",
+      "approved_button_profile": {
+        "Name": "Galmuri11",
+        "Size": 14,
+        "Weight": 600
+      },
+      "encoding": {
+        "cp949_or_ascii": 980,
+        "utf8_converted": 0,
+        "other": 0
+      },
+      "custom_changed_bytes": 188,
+      "resources": null,
+      "status": "menu alignment and button font accepted by user; game closed",
+      "runtime_checks": {
+        "CP949_break_active": true,
+        "CJK_signature": true,
+        "legacy_caption_patch": true,
+        "legacy_CP949_95_patch": true,
+        "official_sfall_file_unchanged": true,
+        "TextOutA_adapter_target": true,
+        "GetTextExtentPoint32A_adapter_target": true,
+        "CreateFontA_adapter_target": true
+      }
+    },
+    {
+      "mod": "nevada",
+      "exe": "Nevada.exe",
+      "exe_sha256": "4a678b20d215cdff126ae1b41aaf8b1d8e729ec975217538e3b0a263a639f848",
+      "official_sfall_unchanged": true,
+      "sfall_sha256": "02469e78c6132010946612ec17cf4bd087aafa85a4485767fae7fba3a4151d24",
+      "adapter_sha256": "70c8b352e42c30dcadd19e4cf350e0661772874fe840a9afe6306e6929e3f02f",
+      "approved_button_profile": {
+        "Name": "Galmuri11",
+        "Size": 14,
+        "Weight": 600
+      },
+      "encoding": {
+        "cp949_or_ascii": 944,
+        "utf8_converted": 0,
+        "other": 0
+      },
+      "custom_changed_bytes": 129,
+      "resources": {
+        "old_rva": 3014656,
+        "new_rva": 3145728,
+        "bytes": 460800,
+        "all_original_resources_retained": true,
+        "original_section_ranges_retained": true,
+        "new_section": ".modrsrc"
+      },
+      "status": "user reports normal display on identical-config retry; first launch failure not reproduced and cause undetermined",
+      "runtime_checks": {
+        "CP949_break_active": true,
+        "CJK_signature": true,
+        "legacy_caption_patch": true,
+        "legacy_CP949_95_patch": true,
+        "official_sfall_file_unchanged": true,
+        "TextOutA_adapter_target": true,
+        "GetTextExtentPoint32A_adapter_target": true,
+        "CreateFontA_adapter_target": true
+      }
+    },
+    {
+      "mod": "olympus",
+      "exe": "olympus.exe",
+      "exe_sha256": "8826d977e3be105a0c0037595d1c8d5d2af115c84cfa928d1351e4d6e4a3d9f3",
+      "official_sfall_unchanged": true,
+      "sfall_sha256": "02469e78c6132010946612ec17cf4bd087aafa85a4485767fae7fba3a4151d24",
+      "adapter_sha256": "70c8b352e42c30dcadd19e4cf350e0661772874fe840a9afe6306e6929e3f02f",
+      "approved_button_profile": {
+        "Name": "Galmuri11",
+        "Size": 14,
+        "Weight": 600
+      },
+      "encoding": {
+        "cp949_or_ascii": 324,
+        "utf8_converted": 0,
+        "other": 0
+      },
+      "custom_changed_bytes": 9,
+      "resources": {
+        "old_rva": 3014656,
+        "new_rva": 3145728,
+        "bytes": 304640,
+        "all_original_resources_retained": true,
+        "original_section_ranges_retained": true,
+        "new_section": ".modrsrc"
+      },
+      "status": "manual pass on checked screens after restoring Olympus-specific menu background; user closed game",
+      "runtime_checks": {
+        "CP949_break_active": true,
+        "CJK_signature": true,
+        "legacy_caption_patch": true,
+        "legacy_CP949_95_patch": true,
+        "official_sfall_file_unchanged": true,
+        "TextOutA_adapter_target": true,
+        "GetTextExtentPoint32A_adapter_target": true,
+        "CreateFontA_adapter_target": true
+      }
+    }
+  ]
+}

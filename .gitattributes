@@ -1,0 +1,8 @@
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.cpp text eol=lf
+*.asm text eol=lf
+fallout2font.ini -text
+*.dll binary
+*.ttf binary
