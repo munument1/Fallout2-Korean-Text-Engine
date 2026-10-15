@@ -34,6 +34,8 @@ class InstallerTests(unittest.TestCase):
     def seed(self, target, profile):
         spec = self.manifest['profiles'][profile]
         shutil.copy2(self.inputs['originals'][profile], target / spec['exe'])
+        for name in spec.get('required_files', {}):
+            shutil.copy2(Path(self.inputs['originals'][profile]).parent / name, target / name)
         shutil.copy2(self.inputs['sfall_dll'], target / 'ddraw.dll')
         (target / 'ddraw.ini').write_bytes('[Main]\r\nHiResMode=1\r\n[Misc]\r\nModSetting=keep\r\n; 한글 주석\r\n[Debugging]\r\nExtraCRC=0x12345678 ; existing mod compatibility\r\n'.encode('cp949'))
         (target / spec['cfg']).write_bytes(b'[system]\r\nlanguage=english\r\nmaster_dat=../master.dat\r\n')
@@ -60,6 +62,10 @@ class InstallerTests(unittest.TestCase):
                 self.assertIn(b'ExtraCRC=0x12345678,', (target / 'ddraw.ini').read_bytes())
                 if profile != 'stock':
                     self.assertIn(b'TranslationsINI=translations\\korean.ini', (target / 'ddraw.ini').read_bytes())
+                if 'hires_mode' in spec:
+                    self.assertIn(f"HiResMode={spec['hires_mode']}".encode(), (target / 'ddraw.ini').read_bytes())
+                for name in spec.get('required_files', {}):
+                    self.assertEqual((target / name).read_bytes(), before[name])
                 self.assertIn('한글 주석'.encode('cp949'), (target / 'ddraw.ini').read_bytes())
                 self.assertIn(b'SCR_WIDTH=1024', (target / 'f2_res.ini').read_bytes())
                 self.assertIn(b'master_dat=../master.dat', (target / spec['cfg']).read_bytes())
@@ -94,6 +100,35 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Installed file changed'):
                 restore(target, dry_run=False)
             self.assertTrue(ini.read_bytes().endswith(b'; user change\r\n'))
+
+    def test_resurrection_requires_original_launcher_and_preserves_mod_settings(self):
+        profile = 'resurrection'
+        source = Path(self.inputs['originals'][profile]).parent
+        for changed in ['fores.exe', 'f2_res.dll', None]:
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as directory:
+                target = Path(directory)
+                self.seed(target, profile)
+                for name in ['ddraw.ini', 'fores.cfg', 'f2_res.ini']:
+                    shutil.copy2(source / name, target / name)
+                if changed:
+                    (target / changed).write_bytes(b'unsupported')
+                    before = {p.name: p.read_bytes() for p in target.iterdir()}
+                    with self.assertRaisesRegex(ValueError, 'original mod file'):
+                        install(self.arguments(profile), target)
+                    self.assertEqual({p.name: p.read_bytes() for p in target.iterdir()}, before)
+                else:
+                    original = {p.name: p.read_bytes() for p in target.iterdir()}
+                    install(self.arguments(profile), target)
+                    cfg = (target / 'fores.cfg').read_bytes()
+                    self.assertIn(b'critter_patches=fores_critter.dat', cfg)
+                    self.assertIn(b'master_dat=..\\master.dat', cfg)
+                    ini = (target / 'ddraw.ini').read_bytes()
+                    self.assertIn(b'StartingMap=nh_cave.map', ini)
+                    self.assertIn(b'ConfigFile=fores.cfg', ini)
+                    self.assertIn(b'HiResMode=0', ini)
+                    restore(target, dry_run=False)
+                    for name, data in original.items():
+                        self.assertEqual((target / name).read_bytes(), data)
 
 
 if __name__ == '__main__':
