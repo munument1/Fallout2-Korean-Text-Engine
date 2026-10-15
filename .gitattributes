@@ -4,5 +4,6 @@
 *.cpp text eol=lf
 *.asm text eol=lf
 fallout2font.ini -text
+fonts/Galmuri-LICENSE.txt -text
 *.dll binary
 *.ttf binary
