@@ -1,5 +1,5 @@
 {
-  "profile_revision": 3,
+  "profile_revision": 4,
   "font_profile": {
     "TEXT": {
       "Name": "Galmuri9",
@@ -14,9 +14,9 @@
   },
   "sfall": "official 4.5.1 unchanged",
   "original_installations": "key source file hashes unchanged in local verification",
-  "scope": "selected user-checked classic x86 screens, official sfall 4.5.1; EtTu 2.0.3911 separately upgraded; no CE claim",
+  "scope": "selected user-checked classic x86 screens, official sfall 4.5.1; EtTu 2.0.3911 and Sonora development de13b880ced4 separately upgraded; no CE claim",
   "nevada_note": "First launch failure reported before menu; same configuration retry displayed normally and logged New Game start. Cause undetermined.",
-  "coverage_note": "User-observed selected screens only; no exhaustive UI or long-play claim. Sonora feedback explicitly confirms menu alignment and button size/weight; individual dialogue coverage was not enumerated.",
+  "coverage_note": "User-observed selected screens only; no exhaustive UI or long-play claim. Sonora feedback explicitly confirms menu alignment and button size/weight; individual dialogue coverage was not enumerated. Sonora development has a separate current case including the user-verified monitor bullet fix.",
   "cases": [
     {
       "mod": "rpu",
@@ -255,6 +255,58 @@
         "existing_menu_labels_localized": 6
       },
       "coverage_note": "User-confirmed selected screens only; not every changed quest branch, long play or CE."
+    },
+    {
+      "mod": "sonora-dev",
+      "baseline": "Sonora eng_repack development de13b880ced4",
+      "development_build": true,
+      "upstream_commit": "de13b880ced45ae4c77136927e04e5a80da2bbcf",
+      "case": "AB_SONORA_DEV_KR_FULL",
+      "exe": "fallout2.exe",
+      "exe_sha256": "a777aa69014181f39edd84499141ce7bca69047420098fc2b5c64848b51b4666",
+      "preserved_original_mod_bytes": 38,
+      "official_sfall_unchanged": true,
+      "sfall_sha256": "02469e78c6132010946612ec17cf4bd087aafa85a4485767fae7fba3a4151d24",
+      "adapter_sha256": "70c8b352e42c30dcadd19e4cf350e0661772874fe840a9afe6306e6929e3f02f",
+      "external_hrp": {
+        "original_sha256": "62ebf4980b4cee4d66265284c0dc8dd3018ac39e303a4366c2af29d5f780f3ec",
+        "patched_sha256": "14ed47e684b299df7368df49550686523d94173cfa90e6c6eadc4111c7e0d5a0",
+        "changed_file_offsets": [
+          "0x15085",
+          "0x150a6"
+        ],
+        "purpose": "Reserve FF for monitor bullet instead of CP949 lead 95",
+        "reversible": true
+      },
+      "hires_mode": 0,
+      "resolution": "1024x768 windowed",
+      "raw_runtime_updates": 48,
+      "compiled_scripts": 640,
+      "compile_errors": 0,
+      "translation_delta": {
+        "reviewed_english_records": 32,
+        "new_records": 12,
+        "updated_records": 12,
+        "retained_equivalent_records": 8,
+        "changed_korean_files": 7,
+        "other_translation_files_byte_identical": true
+      },
+      "status": "User confirmed requested checked screens and fixed lower-message monitor bullet, Korean and wrapping normal; closed game",
+      "initial_issue": "External HRP inserted 95 marker despite the EXE marker patches; corrected only two hash-verified HRP constants, leaving official sfall and font adapter unchanged.",
+      "runtime_checks": {
+        "CP949_break_active": true,
+        "CJK_signature": true,
+        "legacy_caption_patch": true,
+        "legacy_CP949_95_patch": true,
+        "official_sfall_file_unchanged": true,
+        "TextOutA_adapter_target": true,
+        "GetTextExtentPoint32A_adapter_target": true,
+        "CreateFontA_adapter_target": true,
+        "external_HRP_monitor_bullet_constant": true,
+        "external_HRP_monitor_bullet_measurement": true,
+        "external_HRP_verified_patched_file": true
+      },
+      "coverage_note": "User-confirmed selected screens only; individual quests, long play, other sfall versions and CE not validated."
     }
   ]
 }

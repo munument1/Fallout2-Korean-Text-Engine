@@ -65,12 +65,19 @@ class InstallerTests(unittest.TestCase):
                 if 'hires_mode' in spec:
                     self.assertIn(f"HiResMode={spec['hires_mode']}".encode(), (target / 'ddraw.ini').read_bytes())
                 for name in spec.get('required_files', {}):
-                    self.assertEqual((target / name).read_bytes(), before[name])
+                    if name in spec.get('file_patches', {}):
+                        actual = (target / name).read_bytes()
+                        self.assertEqual(sha(actual), spec['file_patches'][name]['patched_sha256'])
+                        self.assertEqual([i for i, (a, b) in enumerate(zip(before[name], actual)) if a != b],
+                                         [0x15085, 0x150a6])
+                        self.assertEqual(result['patched_dependencies'][name], sha(actual))
+                    else:
+                        self.assertEqual((target / name).read_bytes(), before[name])
                 self.assertIn('한글 주석'.encode('cp949'), (target / 'ddraw.ini').read_bytes())
                 self.assertIn(b'SCR_WIDTH=1024', (target / 'f2_res.ini').read_bytes())
                 self.assertIn(b'master_dat=../master.dat', (target / spec['cfg']).read_bytes())
                 self.assertIn(b'language=korean', (target / spec['cfg']).read_bytes())
-                with self.assertRaisesRegex(ValueError, 'already patched'):
+                with self.assertRaisesRegex(ValueError, 'already patched|original mod file'):
                     install(self.arguments(profile), target)
                 restore(target, dry_run=False)
                 for name, data in before.items():
@@ -100,6 +107,19 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Installed file changed'):
                 restore(target, dry_run=False)
             self.assertTrue(ini.read_bytes().endswith(b'; user change\r\n'))
+
+    def test_sonora_external_hrp_rejects_unknown_file_without_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self.seed(target, 'sonora-dev')
+            path = target / 'f2_res.dll'
+            data = bytearray(path.read_bytes())
+            data[0x15085] = 0x94
+            path.write_bytes(data)
+            before = {p.name: p.read_bytes() for p in target.iterdir()}
+            with self.assertRaisesRegex(ValueError, 'original mod file'):
+                install(self.arguments('sonora-dev'), target)
+            self.assertEqual({p.name: p.read_bytes() for p in target.iterdir()}, before)
 
     def test_resurrection_requires_original_launcher_and_preserves_mod_settings(self):
         profile = 'resurrection'
