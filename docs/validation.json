@@ -14,7 +14,7 @@
   },
   "sfall": "official 4.5.1 unchanged",
   "original_installations": "key source file hashes unchanged in local verification",
-  "scope": "selected user-checked classic x86 screens, official sfall 4.5.1; no upstream mod upgrades or CE claim",
+  "scope": "selected user-checked classic x86 screens, official sfall 4.5.1; EtTu 2.0.3911 separately upgraded; no CE claim",
   "nevada_note": "First launch failure reported before menu; same configuration retry displayed normally and logged New Game start. Cause undetermined.",
   "coverage_note": "User-observed selected screens only; no exhaustive UI or long-play claim. Sonora feedback explicitly confirms menu alignment and button size/weight; individual dialogue coverage was not enumerated.",
   "cases": [
@@ -78,7 +78,8 @@
         "TextOutA_adapter_target": true,
         "GetTextExtentPoint32A_adapter_target": true,
         "CreateFontA_adapter_target": true
-      }
+      },
+      "baseline": "EtTu 1.16.3771"
     },
     {
       "mod": "sonora",
@@ -223,6 +224,37 @@
         "active_translation_files_matching_supplied_korean_archive": 629,
         "note": "ZIP extraction CRC checked; SHA256 values recorded locally, not independently published upstream checksums."
       }
+    },
+    {
+      "mod": "ettu",
+      "baseline": "EtTu 2.0.3911",
+      "case": "AA_ETTU_2_0_KR_FULL",
+      "exe": "Fallout2.exe",
+      "exe_sha256": "151e99194ac403bd8cc188a2f10b5ef994ffe496fb925b1a4c1b7f8fa73f634e",
+      "official_sfall_unchanged": true,
+      "sfall_sha256": "02469e78c6132010946612ec17cf4bd087aafa85a4485767fae7fba3a4151d24",
+      "adapter_sha256": "70c8b352e42c30dcadd19e4cf350e0661772874fe840a9afe6306e6929e3f02f",
+      "status": "EtTu 2.0.3911 selected text screens passed; Korean menu labels supplemented and user confirmed menu language/layout; official sfall 4.5.1 unchanged",
+      "runtime_checks": {
+        "CP949_break_active": true,
+        "CJK_signature": true,
+        "legacy_caption_patch": true,
+        "legacy_CP949_95_patch": true,
+        "official_sfall_file_unchanged": true,
+        "TextOutA_adapter_target": true,
+        "GetTextExtentPoint32A_adapter_target": true,
+        "CreateFontA_adapter_target": true
+      },
+      "source_archive_sha256": "e94873abd8e0510f1dd4ae17e73117e9cb099e7700595273acc007e1184c50e7",
+      "unchanged_upstream_files": 10830,
+      "real_2_0_config_install_restore": "passed",
+      "translation_delta": {
+        "new_records": 4,
+        "changed_upstream_records": 2,
+        "retained_equivalent_records": 3,
+        "existing_menu_labels_localized": 6
+      },
+      "coverage_note": "User-confirmed selected screens only; not every changed quest branch, long play or CE."
     }
   ]
 }
