@@ -1,5 +1,5 @@
 {
-  "version": "1.1-profile3",
+  "version": "1.1-profile4",
   "stock_sha256": "581c09c20fee70edc09ec412ee034e62e89cdefa13092e534ddd17d23f8163cb",
   "cjk_exe_sha256": "529fbfe8a539954cc48012034cd5f1a7cf182b6c28cd9c9ae6ac3f5259bcdda4",
   "korean_stock_sha256": "151e99194ac403bd8cc188a2f10b5ef994ffe496fb925b1a4c1b7f8fa73f634e",
@@ -376,6 +376,40 @@
         "MAIN_MENU_SIZE": 0,
         "USE_HIRES_IMAGES": 0,
         "SCALE_BUTTONS_AND_TEXT_MENU": 0
+      }
+    },
+    "sonora-dev": {
+      "exe": "fallout2.exe",
+      "cfg": "fallout2.cfg",
+      "original_sha256": "048684f802b05859e2b160fa358be1b99075bf31b49a312a536645581aa16b5f",
+      "patched_sha256": "a777aa69014181f39edd84499141ce7bca69047420098fc2b5c64848b51b4666",
+      "sfall_crc": "0xFC345277",
+      "menu": {
+        "MAIN_MENU_SIZE": 0,
+        "USE_HIRES_IMAGES": 0,
+        "SCALE_BUTTONS_AND_TEXT_MENU": 0
+      },
+      "hires_mode": 0,
+      "required_files": {
+        "f2_res.dll": "62ebf4980b4cee4d66265284c0dc8dd3018ac39e303a4366c2af29d5f780f3ec"
+      },
+      "file_patches": {
+        "f2_res.dll": {
+          "patched_sha256": "14ed47e684b299df7368df49550686523d94173cfa90e6c6eadc4111c7e0d5a0",
+          "patches": [
+            {
+              "offset": "0x15084",
+              "before": "b395",
+              "after": "b3ff"
+            },
+            {
+              "offset": "0x150a2",
+              "before": "c644241095",
+              "after": "c6442410ff"
+            }
+          ],
+          "purpose": "Reserve FF for external HRP 4.1.8 monitor bullets; preserve normal CP949 95 lead bytes."
+        }
       }
     }
   }

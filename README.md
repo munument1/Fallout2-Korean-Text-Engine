@@ -12,13 +12,14 @@
 | `rpu` | RPU 2.4.34 | 실제 한국어 번역과 보완한 배경 설명·메뉴 확인 |
 | `ettu` | EtTu 2.0.3911 | 기존 번역 유지·변경 문구 이행, 본문과 보완한 한국어 메뉴 확인 |
 | `sonora` | 기존 Sonora 클래식 설치본 | 메뉴 배치·버튼 크기·굵기 확인 |
+| `sonora-dev` | Sonora eng_repack `de13b880ced4` 개발본 | 요청한 확인 화면·한글·줄바꿈 및 수정한 하단 글머리 기호 정상 |
 | `nevada` | 기존 Nevada Extended 설치본 | 동일 설정 재실행 후 정상 표시 |
 | `olympus` | Olympus 2207 1.2 설치본 | 전용 메뉴 복구 후 확인 화면 정상 |
 | `resurrection` | Resurrection English 1.5 + KR1.1 | 기존 런처·외부 고해상도 패치 유지 후 확인 화면 정상 |
 
 전체 UI나 장시간 플레이 검증을 뜻하지 않는다. 네바다의 첫 실행 종료는 같은 설정 재실행에서 재현되지 않았으며 원인은 미확정이다. x64 CE/Fission은 아직 지원 판정하지 않았다. 새 sfall 버전은 별도로 검증한다.
 
-[실행 검증 기록](docs/validation.json). 새 설치 도구는 일곱 프로필에서 게임 시험 EXE와 결과 해시가 같은지, 설정 보존·설치·복구·미검증 파일 거부를 검사했다. EtTu는 2.0.3911까지 별도로 이행·검증했으며, 다른 모드 기준은 위 표를 따른다.
+[실행 검증 기록](docs/validation.json). 설치 도구는 여덟 프로필에서 게임 시험 EXE와 결과 해시가 같은지, 설정 보존·설치·복구·미검증 파일 거부를 검사했다. EtTu는 2.0.3911, Sonora는 위 개발 커밋까지 별도로 이행·검증했다.
 
 ## 포함 파일
 
@@ -57,6 +58,10 @@
 설치 도구는 EXE·글꼴 파일 외에 `ExtraCRC`, `language=korean`, 번역 INI 경로, 검증한 메뉴 표시 항목과 리저렉션의 고해상도 중복 방지 설정을 적용한다. 게임 해상도나 모드 스크립트는 바꾸지 않는다. 기존 메뉴 설정을 유지하려면 `--keep-menu-settings`를 추가한다. 올림푸스는 전용 메뉴 그림을 활성화해야 하므로 그 예외를 프로필에 포함했다.
 
 리저렉션은 **Resurrection 폴더**에 `--profile resurrection`으로 적용한다. 확장자 없는 `FALLOUT2`가 실제 게임 파일이고 `fores.exe`는 원본 그대로 유지할 전용 런처다. 설치 후에도 **`fores.exe`로 실행**한다. 도구는 검증한 런처와 `f2_res.dll` 해시를 확인하고, 외부 고해상도 패치와의 중복을 피하도록 `ddraw.ini`의 `[Main] HiResMode=0`을 설정한다. `--keep-menu-settings`를 써도 이 중복 방지 설정은 적용한다.
+
+소노라 개발본은 먼저 [한국어 저장소의 런타임 준비 도구](https://github.com/munument1/Fallout2-Sonora-KR/blob/main/docs/SONORA_DEVELOPMENT_KO.md)로 `1.16.4-sfall` 원본에서 고정된 개발 커밋을 구성한다. **`--profile sonora-dev`와 `--base-exe`**를 지정하고 `fallout2.exe`로 실행한다. 기존 `FSonoraDLC.exe`용 `sonora` 프로필과 구분한다. 외부 HRP 중복 방지용 `HiResMode=0`을 사용하며 원본 EXE의 모드 변경 38바이트를 보존한다.
+
+이 개발본의 외부 HRP 4.1.8은 하단 메시지창에 CP949와 충돌하는 `0x95` 글머리 기호를 별도로 넣는다. 검증된 **`f2_res.dll`의 상수 두 바이트만 `0xFF`로 변경**한다(파일 오프셋 `0x15085`, `0x150A6`). 원본 DLL을 백업하고 `--restore`로 복구하며, 정상 한글 바이트를 치환하지 않는다. 공식 sfall DLL과 배포 한국어 출력 DLL은 그대로다. 다른 HRP 파일이나 버전은 강제로 허용하지 않는다.
 
 모드 프로필은 `translations\korean.ini`를 사용한다. 이 파일은 새 번역 ZIP에 포함된다. 일반 순정 `stock` 프로필은 기존 번역 INI 설정을 유지한다.
 

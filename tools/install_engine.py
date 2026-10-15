@@ -39,7 +39,7 @@ def restore(target, dry_run):
         raise ValueError('Invalid recovery manifest.')
     allowed = {'fallout2.exe', 'Fallout2.exe', 'FSonoraDLC.exe', 'Nevada.exe', 'olympus.exe', 'FALLOUT2',
                'fallout2.cfg', 'Fallout2.cfg', 'Nevada.cfg', 'olympus.cfg', 'fores.cfg', 'ddraw.ini', 'f2_res.ini',
-               'fallout2font.dll', 'fallout2font_legacy.dll', 'fallout2font.ini',
+               'f2_res.dll', 'fallout2font.dll', 'fallout2font_legacy.dll', 'fallout2font.ini',
                'fonts/Galmuri9.ttf', 'fonts/Galmuri11.ttf', 'fonts/Galmuri-LICENSE.txt'}
     if not set(state['before']) <= allowed:
         raise ValueError('Unexpected recovery path.')
@@ -97,6 +97,21 @@ def install(args, target):
     if crc != profile['sfall_crc']:
         raise ValueError('Derived EXE CRC mismatch.')
     payload = {profile['exe']: patched, 'fallout2font_legacy.dll': legacy}
+    # External HRP generates its own monitor bullet, bypassing the EXE constants.
+    # Patch only a hash-verified profile dependency, with exact instruction checks.
+    for name, spec in profile.get('file_patches', {}).items():
+        if name not in required_hashes or name != 'f2_res.dll':
+            raise ValueError('Unsupported profile dependency patch.')
+        data = bytearray(checked_destination(target, name).read_bytes())
+        for entry in spec['patches']:
+            offset = int(entry['offset'], 16)
+            before, after = bytes.fromhex(entry['before']), bytes.fromhex(entry['after'])
+            if len(before) != len(after) or data[offset:offset + len(before)] != before:
+                raise ValueError('External HRP bullet instruction mismatch.')
+            data[offset:offset + len(after)] = after
+        if sha(data) != spec['patched_sha256']:
+            raise ValueError('Derived external HRP hash mismatch.')
+        payload[name] = bytes(data)
     for name, expected in manifest['assets'].items():
         data = (ROOT / name).read_bytes()
         if sha(data) != expected:
@@ -119,7 +134,7 @@ def install(args, target):
         # All new translation-only mod packages provide this file separately.
         text = put_ini(text, 'Main', 'TranslationsINI', r'translations\korean.ini')
     if 'hires_mode' in profile:
-        # Resurrection's launcher loads the external HRP before sfall starts.
+        # Profiles using an external HRP keep the integrated mode disabled.
         text = put_ini(text, 'Main', 'HiResMode', str(profile['hires_mode']))
     payload['ddraw.ini'] = text.encode(encoding)
     cfg_path = checked_destination(target, profile['cfg'])
@@ -141,7 +156,8 @@ def install(args, target):
             raise ValueError('Unfinished temporary installation file found.')
     report = {'operation': 'install', 'profile': args.profile, 'dry_run': args.dry_run,
               'sfall_unchanged': True, 'preserved_mod_bytes': preserved, 'exe_crc': crc,
-              'preserved_original_files': required_hashes,
+              'preserved_original_files': {name: value for name, value in required_hashes.items() if name not in payload},
+              'patched_dependencies': {name: spec['patched_sha256'] for name, spec in profile.get('file_patches', {}).items()},
               'files': sorted(payload)}
     if args.dry_run:
         return report
@@ -163,7 +179,7 @@ def install(args, target):
         if sha(sfall_path.read_bytes()) != sfall_hash:
             raise ValueError('Official sfall changed during installation.')
         for name, expected in required_hashes.items():
-            if sha((target / name).read_bytes()) != expected:
+            if sha((target / name).read_bytes()) != state['after'].get(name, expected):
                 raise ValueError(f'Original mod file changed during installation: {name}')
     except Exception:
         for name in reversed(touched):
@@ -178,7 +194,7 @@ def install(args, target):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('target', type=Path)
-    parser.add_argument('--profile', choices=['stock', 'rpu', 'ettu', 'sonora', 'nevada', 'olympus', 'resurrection'])
+    parser.add_argument('--profile', choices=['stock', 'rpu', 'ettu', 'sonora', 'sonora-dev', 'nevada', 'olympus', 'resurrection'])
     parser.add_argument('--cjk-exe', type=Path)
     parser.add_argument('--legacy-font', type=Path)
     parser.add_argument('--base-exe', type=Path)
