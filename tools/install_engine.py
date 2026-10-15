@@ -37,8 +37,8 @@ def restore(target, dry_run):
     state = json.loads((backup / 'manifest.json').read_text(encoding='utf-8'))
     if set(state['before']) != set(state['after']):
         raise ValueError('Invalid recovery manifest.')
-    allowed = {'fallout2.exe', 'Fallout2.exe', 'FSonoraDLC.exe', 'Nevada.exe', 'olympus.exe',
-               'fallout2.cfg', 'Fallout2.cfg', 'Nevada.cfg', 'olympus.cfg', 'ddraw.ini', 'f2_res.ini',
+    allowed = {'fallout2.exe', 'Fallout2.exe', 'FSonoraDLC.exe', 'Nevada.exe', 'olympus.exe', 'FALLOUT2',
+               'fallout2.cfg', 'Fallout2.cfg', 'Nevada.cfg', 'olympus.cfg', 'fores.cfg', 'ddraw.ini', 'f2_res.ini',
                'fallout2font.dll', 'fallout2font_legacy.dll', 'fallout2font.ini',
                'fonts/Galmuri9.ttf', 'fonts/Galmuri11.ttf', 'fonts/Galmuri-LICENSE.txt'}
     if not set(state['before']) <= allowed:
@@ -69,6 +69,12 @@ def install(args, target):
     if args.profile not in manifest['profiles']:
         raise ValueError('No verified executable profile for this mod.')
     profile = manifest['profiles'][args.profile]
+    required_hashes = {}
+    for name, expected in profile.get('required_files', {}).items():
+        path = checked_destination(target, name)
+        if not path.is_file() or sha(path.read_bytes()) != expected:
+            raise ValueError(f'Required original mod file is missing or unsupported: {name}')
+        required_hashes[name] = expected
     original_path = checked_destination(target, profile['exe'])
     original = original_path.read_bytes()
     if sha(original) != profile['original_sha256']:
@@ -112,6 +118,9 @@ def install(args, target):
     if args.profile != 'stock':
         # All new translation-only mod packages provide this file separately.
         text = put_ini(text, 'Main', 'TranslationsINI', r'translations\korean.ini')
+    if 'hires_mode' in profile:
+        # Resurrection's launcher loads the external HRP before sfall starts.
+        text = put_ini(text, 'Main', 'HiResMode', str(profile['hires_mode']))
     payload['ddraw.ini'] = text.encode(encoding)
     cfg_path = checked_destination(target, profile['cfg'])
     text, encoding = decode_ini(cfg_path.read_bytes())
@@ -132,6 +141,7 @@ def install(args, target):
             raise ValueError('Unfinished temporary installation file found.')
     report = {'operation': 'install', 'profile': args.profile, 'dry_run': args.dry_run,
               'sfall_unchanged': True, 'preserved_mod_bytes': preserved, 'exe_crc': crc,
+              'preserved_original_files': required_hashes,
               'files': sorted(payload)}
     if args.dry_run:
         return report
@@ -152,6 +162,9 @@ def install(args, target):
             touched.append(name)
         if sha(sfall_path.read_bytes()) != sfall_hash:
             raise ValueError('Official sfall changed during installation.')
+        for name, expected in required_hashes.items():
+            if sha((target / name).read_bytes()) != expected:
+                raise ValueError(f'Original mod file changed during installation: {name}')
     except Exception:
         for name in reversed(touched):
             if state['before'][name] is None:
@@ -165,7 +178,7 @@ def install(args, target):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('target', type=Path)
-    parser.add_argument('--profile', choices=['stock', 'rpu', 'ettu', 'sonora', 'nevada', 'olympus'])
+    parser.add_argument('--profile', choices=['stock', 'rpu', 'ettu', 'sonora', 'nevada', 'olympus', 'resurrection'])
     parser.add_argument('--cjk-exe', type=Path)
     parser.add_argument('--legacy-font', type=Path)
     parser.add_argument('--base-exe', type=Path)

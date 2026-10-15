@@ -1,5 +1,5 @@
 {
-  "profile_revision": 2,
+  "profile_revision": 3,
   "font_profile": {
     "TEXT": {
       "Name": "Galmuri9",
@@ -185,6 +185,43 @@
         "TextOutA_adapter_target": true,
         "GetTextExtentPoint32A_adapter_target": true,
         "CreateFontA_adapter_target": true
+      }
+    },
+    {
+      "mod": "resurrection",
+      "baseline": "Resurrection English 1.5 + Korean KR1.1",
+      "exe": "FALLOUT2",
+      "exe_sha256": "151e99194ac403bd8cc188a2f10b5ef994ffe496fb925b1a4c1b7f8fa73f634e",
+      "launcher": "fores.exe",
+      "launcher_sha256": "f8c4fb4f4b4291ca47f6f6925a65da9e43455caa2839e56b66fefbe47573e806",
+      "launcher_unchanged": true,
+      "launcher_static_write_calls": 164,
+      "launcher_total_written_bytes": 319,
+      "launcher_cjk_conflicts": 0,
+      "hires_mode": 0,
+      "external_hrp_sha256": "2d3c52cf624b22958db7fa44e3db71c2d0478503da5ceb40f0636dea1202fb5a",
+      "official_sfall_unchanged": true,
+      "sfall_sha256": "02469e78c6132010946612ec17cf4bd087aafa85a4485767fae7fba3a4151d24",
+      "adapter_sha256": "70c8b352e42c30dcadd19e4cf350e0661772874fe840a9afe6306e6929e3f02f",
+      "status": "user confirmed all checked screens normal and closed game; selected menu/character/new-game text scope",
+      "runtime_checks": {
+        "CP949_break_active": true,
+        "CJK_signature": true,
+        "legacy_caption_patch": true,
+        "legacy_CP949_95_patch": true,
+        "official_sfall_file_unchanged": true,
+        "TextOutA_adapter_target": true,
+        "GetTextExtentPoint32A_adapter_target": true,
+        "CreateFontA_adapter_target": true
+      },
+      "initial_prompt": "Duplicate HRP warning resolved by keeping original external HRP and setting HiResMode=0.",
+      "provenance": {
+        "official_page": "https://resurrection.cz/en/download/",
+        "official_archive": "https://bitbucket.org/resurrection/fallout-resurrection/downloads/FoRes_EN_1_5.zip",
+        "official_archive_sha256": "7857d1f5cb870035e05ff8d08a784dc7796c7cc09988f1ca86debd711f9edc02",
+        "korean_archive_sha256": "c910167af99fae75de1a08ffd4f22161db8369e6181908fd05b23a4cccb1d24b",
+        "active_translation_files_matching_supplied_korean_archive": 629,
+        "note": "ZIP extraction CRC checked; SHA256 values recorded locally, not independently published upstream checksums."
       }
     }
   ]
