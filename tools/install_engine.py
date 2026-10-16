@@ -80,6 +80,45 @@ def restore(target, dry_run):
     return {'operation': 'restore', 'dry_run': dry_run}
 
 
+def inspect_sfall(target, manifest):
+    """Detect an existing sfall installation, without requiring or replacing it.
+
+    Korean rasterization uses the patched game EXE + font DLL and works as a
+    separate subsystem. Existing sfall installations still need the patched
+    game's CRC registered in their own INI.
+    """
+    dll = checked_destination(target, 'ddraw.dll')
+    ini = checked_destination(target, 'ddraw.ini')
+    if not dll.exists():
+        return {'enabled': False, 'status': 'absent', 'hash': None}
+    if not dll.is_file() or dll.is_symlink():
+        raise ValueError('An unsupported ddraw.dll entry was found.')
+    if not ini.is_file() or ini.is_symlink():
+        raise ValueError('ddraw.dll exists, but its ddraw.ini is missing or invalid. '
+                         'Keep the mod original configuration file.')
+    data = dll.read_bytes()
+    digest = sha(data)
+    if digest == manifest['official_sfall_sha256']:
+        return {'enabled': True, 'status': 'verified-4.5.1', 'hash': digest}
+    # Older and mod-bundled sfall builds are not identical to our reference
+    # binary. Check that the DLL is an x86 PE and the paired configuration is
+    # recognizably sfall, rather than editing an unrelated DirectDraw wrapper.
+    try:
+        pe = pefile.PE(data=data, fast_load=True)
+        if pe.FILE_HEADER.Machine != 0x14c or not (pe.FILE_HEADER.Characteristics & 0x2000):
+            raise ValueError('Not an x86 sfall-style DLL.')
+    except pefile.PEFormatError as exc:
+        raise ValueError('Unrecognized ddraw.dll. The Korean renderer does not '
+                         'require sfall; remove this file only if your mod does not '
+                         'need it.') from exc
+    config, _ = decode_ini(ini.read_bytes())
+    sections = {line.strip().casefold() for line in config.splitlines() if line.strip().startswith('[')}
+    if not {'[main]', '[debugging]'} <= sections:
+        raise ValueError('An unverified ddraw.dll was found without sfall-style '
+                         'configuration. Refusing to change its ddraw.ini.')
+    return {'enabled': True, 'status': 'existing-unverified', 'hash': digest}
+
+
 def install(args, target):
     manifest = json.loads((ROOT / 'runtime-manifest.json').read_text(encoding='utf-8'))
     if args.profile not in manifest['profiles']:
@@ -95,10 +134,9 @@ def install(args, target):
     original = original_path.read_bytes()
     if sha(original) != profile['original_sha256']:
         raise ValueError('Original EXE is unsupported or already patched. Restore first.')
+    sfall = inspect_sfall(target, manifest)
     sfall_path = checked_destination(target, 'ddraw.dll')
-    sfall_hash = sha(sfall_path.read_bytes())
-    if sfall_hash != manifest['official_sfall_sha256']:
-        raise ValueError('Install unmodified official sfall 4.5.1 before using this verified build.')
+    sfall_hash = sfall['hash']
     donor = args.cjk_exe.read_bytes()
     legacy = args.legacy_font.read_bytes()
     if sha(legacy) != manifest['legacy_font_sha256']:
@@ -109,9 +147,13 @@ def install(args, target):
     patched, preserved = korean_exe(original, stock, donor, manifest)
     if sha(patched) != profile['patched_sha256']:
         raise ValueError('Derived EXE does not match the game-tested build.')
-    crc = f'0x{sfall_crc(patched, manifest["crc_table"]):08X}'
-    if crc != profile['sfall_crc']:
-        raise ValueError('Derived EXE CRC mismatch.')
+    # CRC is a compatibility setting for sfall; the Korean renderer does not
+    # need the DLL. We still verify the derived EXE independently above.
+    crc = None
+    if sfall['enabled']:
+        crc = f'0x{sfall_crc(patched, manifest["crc_table"]):08X}'
+        if crc != profile['sfall_crc']:
+            raise ValueError('Derived EXE CRC mismatch.')
     payload = {profile['exe']: patched, 'fallout2font_legacy.dll': legacy}
     # External HRP generates its own monitor bullet, bypassing the EXE constants.
     # Patch only a hash-verified profile dependency, with exact instruction checks.
@@ -133,26 +175,27 @@ def install(args, target):
         if sha(data) != expected:
             raise ValueError(f'Runtime asset hash mismatch: {name}; use the verified build.')
         payload[name] = data
-    ini_path = checked_destination(target, 'ddraw.ini')
-    text, encoding = decode_ini(ini_path.read_bytes())
-    active, existing = False, []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith('['):
-            active = stripped.lower() == '[debugging]'
-        elif active and '=' in stripped and stripped.split('=', 1)[0].strip().lower() == 'extracrc':
-            existing = [value.strip() for value in stripped.split('=', 1)[1].split(';', 1)[0].split(',') if value.strip()]
-            break
-    if crc.lower() not in [value.lower() for value in existing]:
-        existing.append(crc)
-    text = put_ini(text, 'Debugging', 'ExtraCRC', ','.join(existing))
-    if args.profile != 'stock':
-        # All new translation-only mod packages provide this file separately.
-        text = put_ini(text, 'Main', 'TranslationsINI', r'translations\korean.ini')
-    if 'hires_mode' in profile:
-        # Profiles using an external HRP keep the integrated mode disabled.
-        text = put_ini(text, 'Main', 'HiResMode', str(profile['hires_mode']))
-    payload['ddraw.ini'] = text.encode(encoding)
+    if sfall['enabled']:
+        ini_path = checked_destination(target, 'ddraw.ini')
+        text, encoding = decode_ini(ini_path.read_bytes())
+        active, existing = False, []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith('['):
+                active = stripped.lower() == '[debugging]'
+            elif active and '=' in stripped and stripped.split('=', 1)[0].strip().lower() == 'extracrc':
+                existing = [value.strip() for value in stripped.split('=', 1)[1].split(';', 1)[0].split(',') if value.strip()]
+                break
+        if crc.lower() not in [value.lower() for value in existing]:
+            existing.append(crc)
+        text = put_ini(text, 'Debugging', 'ExtraCRC', ','.join(existing))
+        if args.profile != 'stock':
+            # All new translation-only mod packages provide this file separately.
+            text = put_ini(text, 'Main', 'TranslationsINI', r'translations\korean.ini')
+        if 'hires_mode' in profile:
+            # Profiles using an external HRP keep the integrated mode disabled.
+            text = put_ini(text, 'Main', 'HiResMode', str(profile['hires_mode']))
+        payload['ddraw.ini'] = text.encode(encoding)
     cfg_path = checked_destination(target, profile['cfg'])
     text, encoding = decode_ini(cfg_path.read_bytes())
     payload[profile['cfg']] = put_ini(text, 'system', 'language', 'korean').encode(encoding)
@@ -171,7 +214,8 @@ def install(args, target):
         if path.with_name(path.name + '.korean-tmp').exists():
             raise ValueError('Unfinished temporary installation file found.')
     report = {'operation': 'install', 'profile': args.profile, 'dry_run': args.dry_run,
-              'sfall_unchanged': True, 'preserved_mod_bytes': preserved, 'exe_crc': crc,
+              'sfall_unchanged': True, 'sfall_status': sfall['status'],
+              'preserved_mod_bytes': preserved, 'exe_crc': crc,
               'preserved_original_files': {name: value for name, value in required_hashes.items() if name not in payload},
               'patched_dependencies': {name: spec['patched_sha256'] for name, spec in profile.get('file_patches', {}).items()},
               'files': sorted(payload)}
@@ -192,8 +236,8 @@ def install(args, target):
         for name, data in payload.items():
             atomic(target / name, data)
             touched.append(name)
-        if sha(sfall_path.read_bytes()) != sfall_hash:
-            raise ValueError('Official sfall changed during installation.')
+        if sfall['enabled'] and sha(sfall_path.read_bytes()) != sfall_hash:
+            raise ValueError('Existing sfall changed during installation.')
         for name, expected in required_hashes.items():
             if sha((target / name).read_bytes()) != state['after'].get(name, expected):
                 raise ValueError(f'Original mod file changed during installation: {name}')
