@@ -156,6 +156,7 @@ class Installer(tk.Tk):
                         variable=self.keep_menu).pack(anchor="w", pady=(4, 3))
 
         actions = ttk.Frame(outer)
+        self.actions = actions
         actions.pack(fill="x", pady=(17, 6))
         ttk.Button(actions, text="설치하기", command=self._install).pack(side="left", padx=(0, 9))
         ttk.Button(actions, text="설치 전 상태로 복구", command=self._restore).pack(side="left")
@@ -194,7 +195,7 @@ class Installer(tk.Tk):
 
     def _toggle_advanced(self):
         if self.advanced.get():
-            self.advanced_frame.pack(fill="x", before=self.advanced_frame.master.winfo_children()[-3])
+            self.advanced_frame.pack(fill="x", before=self.actions)
         else:
             self.advanced_frame.pack_forget()
 
@@ -248,6 +249,8 @@ class Installer(tk.Tk):
         profile = PROFILE_BY_TITLE.get(self.profile_title.get())
         if not profile or profile not in detect_profiles(target, self.manifest):
             raise ValueError("지원하는 게임 종류를 선택하세요. 원본 파일 버전이 다르면 설치할 수 없습니다.")
+        if not self.cjk_folder.get():
+            raise ValueError("CJK 원본 폴더를 선택하세요.")
         cjk_exe, legacy = find_cjk_files(self.cjk_folder.get(), self.manifest)
         if cjk_exe is None or legacy is None:
             raise ValueError("CJK 원본 폴더를 선택하세요. FO2_UPU_CHT_v34의 EXE와 DLL이 필요합니다.")
