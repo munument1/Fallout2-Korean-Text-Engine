@@ -6,11 +6,27 @@ import shutil
 import sys
 from pathlib import Path
 import pefile
-from runtime import korean_exe, sfall_crc, sha, put_ini, decode_ini
+if __package__:
+    from .runtime import korean_exe, sfall_crc, sha, put_ini, decode_ini
+else:
+    from runtime import korean_exe, sfall_crc, sha, put_ini, decode_ini
 
 ROOT = Path(__file__).resolve().parents[1]
 STEAM = Path(r'C:\Games\Steam\steamapps\common\Fallout 2').resolve()
 BACKUP = 'korean_engine_backup_v2'
+
+
+def validate_target(target):
+    """Reject a Steam-managed original game installation; write only to a copy."""
+    target = Path(target).resolve(strict=True)
+    if not target.is_dir():
+        raise ValueError('Select an existing game directory.')
+    parts = tuple(part.casefold() for part in target.parts)
+    managed = any(parts[index:index + 3] == ('steamapps', 'common', 'fallout 2')
+                  for index in range(len(parts) - 2))
+    if managed or target == STEAM or STEAM in target.parents:
+        raise ValueError('Use an independent game copy; the original Steam installation is protected.')
+    return target
 
 
 def atomic(path, data):
@@ -203,9 +219,7 @@ def main():
     parser.add_argument('--restore', action='store_true')
     args = parser.parse_args()
     try:
-        target = args.target.resolve(strict=True)
-        if target == STEAM or STEAM in target.parents:
-            raise ValueError('Use an independent game copy; the original Steam installation is protected.')
+        target = validate_target(args.target)
         if args.restore:
             result = restore(target, args.dry_run)
         else:
