@@ -1,0 +1,52 @@
+name: Prototype independent Korean renderer
+
+on:
+  push:
+    branches:
+      - feature/selfcontained-korean-engine
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-renderer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+      - name: Build independent renderer (no legacy DLL)
+        shell: cmd
+        run: |
+          mkdir build\standalone
+          cl /nologo /std:c++17 /EHsc /O2 /MT /LD /utf-8 /Fobuild\standalone\font_standalone.obj src\font_standalone.cpp /link /Brepro /DEF:src\font_bridge.def /OUT:build\standalone\fallout2font.dll gdi32.lib user32.lib
+          cl /nologo /std:c++17 /EHsc /O2 /MT /utf-8 /Febuild\standalone\font_standalone_probe.exe tests\font_standalone_probe.cpp user32.lib
+      - name: Validate 11,172 Hangul and guard bytes without third-party DLL
+        shell: pwsh
+        run: |
+          Copy-Item fallout2font.ini build/standalone/fallout2font.ini
+          New-Item -ItemType Directory -Path build/standalone/fonts -Force | Out-Null
+          Copy-Item fonts/Galmuri9.ttf build/standalone/fonts/Galmuri9.ttf
+          Copy-Item fonts/Galmuri11.ttf build/standalone/fonts/Galmuri11.ttf
+          & build/standalone/font_standalone_probe.exe (Resolve-Path build/standalone/fallout2font.dll).Path
+          if ($LASTEXITCODE -ne 0) { throw "Standalone renderer probe failed" }
+          if (Test-Path build/standalone/fallout2font_legacy.dll) { throw "Unexpected legacy DLL dependency" }
+      - name: Keep prototype separate from stable releases
+        uses: actions/upload-artifact@v4
+        with:
+          name: independent-korean-renderer-x86-prototype
+          path: |
+            build/standalone/fallout2font.dll
+            fallout2font.ini
+            fonts/Galmuri9.ttf
+            fonts/Galmuri11.ttf
+            fonts/Galmuri-LICENSE.txt
+          if-no-files-found: error
+
