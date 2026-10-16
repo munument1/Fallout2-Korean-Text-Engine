@@ -85,17 +85,47 @@ class InstallerTests(unittest.TestCase):
                 self.assertFalse((target / 'fallout2font.dll').exists())
                 self.assertFalse((target / 'fallout2font_legacy.dll').exists())
 
-    def test_unverified_sfall_and_executable_rejected_without_writes(self):
-        for changed in ['ddraw.dll', 'fallout2.exe']:
-            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as directory:
-                target = Path(directory)
-                self.seed(target, 'stock')
-                path = target / changed
-                path.write_bytes(path.read_bytes() + b'changed')
-                before = {p.name: p.read_bytes() for p in target.iterdir()}
-                with self.assertRaises(ValueError):
-                    install(self.arguments('stock'), target)
-                self.assertEqual({p.name: p.read_bytes() for p in target.iterdir()}, before)
+    def test_modified_game_executable_is_rejected_without_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self.seed(target, 'stock')
+            path = target / 'fallout2.exe'
+            path.write_bytes(path.read_bytes() + b'changed')
+            before = {p.name: p.read_bytes() for p in target.iterdir()}
+            with self.assertRaises(ValueError):
+                install(self.arguments('stock'), target)
+            self.assertEqual({p.name: p.read_bytes() for p in target.iterdir()}, before)
+
+    def test_existing_sfall_version_not_forced_to_451(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self.seed(target, 'stock')
+            dll = target / 'ddraw.dll'
+            dll.write_bytes(dll.read_bytes() + b'custom-version')
+            original = dll.read_bytes()
+            result = install(self.arguments('stock'), target)
+            self.assertEqual(result['sfall_status'], 'existing-unverified')
+            self.assertEqual(dll.read_bytes(), original)
+            self.assertIn(b'ExtraCRC=', (target / 'ddraw.ini').read_bytes())
+            restore(target, dry_run=False)
+            self.assertEqual(dll.read_bytes(), original)
+
+    def test_stock_without_sfall_or_ini(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self.seed(target, 'stock')
+            (target / 'ddraw.dll').unlink()
+            (target / 'ddraw.ini').unlink()
+            result = install(self.arguments('stock'), target, )
+            self.assertEqual(result['sfall_status'], 'absent')
+            self.assertIsNone(result['exe_crc'])
+            self.assertFalse((target / 'ddraw.ini').exists())
+            self.assertFalse((target / 'ddraw.dll').exists())
+            self.assertEqual(sha((target / 'fallout2.exe').read_bytes()),
+                             self.manifest['profiles']['stock']['patched_sha256'])
+            restore(target, dry_run=False)
+            self.assertFalse((target / 'ddraw.ini').exists())
+            self.assertFalse((target / 'ddraw.dll').exists())
 
     def test_modified_installation_prevents_automatic_restore(self):
         with tempfile.TemporaryDirectory() as directory:
