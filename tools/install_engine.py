@@ -40,11 +40,14 @@ def atomic(path, data):
 
 
 def checked_destination(target, name):
-    path = target / name
-    if not path.resolve().is_relative_to(target):
-        raise ValueError(f'Redirected destination: {name}')
-    if path.exists() and path.is_symlink():
+    # Compare canonical paths: Windows temporary/short-name paths may differ
+    # from their resolved spelling. Never allow symlinks, even dangling ones.
+    root = Path(target).resolve(strict=True)
+    path = root / name
+    if path.is_symlink():
         raise ValueError(f'Symlink destination: {name}')
+    if not path.resolve().is_relative_to(root):
+        raise ValueError(f'Redirected destination: {name}')
     return path
 
 
