@@ -44,7 +44,7 @@ class ExtraCRCEditTests(unittest.TestCase):
     def test_empty_extra_crc_value_populated(self):
         ini = "[Debugging]\r\nExtraCRC= ; user note\r\n"
         self.assertEqual(ensure_sfall_crc(ini, KOREAN_CRC),
-                         "[Debugging]\r\nExtraCRC=0xFCDC75E0 ; user note\r\n")
+                         "[Debugging]\r\nExtraCRC= 0xFCDC75E0 ; user note\r\n")
 
     def test_utf8_bom_survives_byte_for_byte(self):
         raw = b"\xef\xbb\xbf[Debugging]\r\nExtraCRC=0x12345678\r\n"
