@@ -149,6 +149,9 @@ def ensure_sfall_crc(text, crc):
             return text
         value = current.rstrip()
         trailing = current[len(value):]
+        if not value and match.group(3) and not trailing:
+            # Keep an inline comment separated when the original value was empty.
+            trailing = ' '
         updated = (value + ',' if value else '') + crc + trailing
         lines[index] = body[:match.start(2)] + updated + body[match.end(2):] + eol
         return ''.join(lines)
