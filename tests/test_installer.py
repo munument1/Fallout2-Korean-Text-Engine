@@ -60,8 +60,9 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual((target / 'ddraw.dll').read_bytes(), before['ddraw.dll'])
                 self.assertIn(b'ModSetting=keep', (target / 'ddraw.ini').read_bytes())
                 self.assertIn(b'ExtraCRC=0x12345678,', (target / 'ddraw.ini').read_bytes())
-                if profile != 'stock':
-                    self.assertIn(b'TranslationsINI=translations\\korean.ini', (target / 'ddraw.ini').read_bytes())
+                # Do not impose the Korean TranslationsINI path on mod packs.
+                self.assertNotIn(b'TranslationsINI=translations\\korean.ini',
+                                 (target / 'ddraw.ini').read_bytes())
                 if 'hires_mode' in spec:
                     self.assertIn(f"HiResMode={spec['hires_mode']}".encode(), (target / 'ddraw.ini').read_bytes())
                 for name in spec.get('required_files', {}):
@@ -110,17 +111,22 @@ class InstallerTests(unittest.TestCase):
             restore(target, dry_run=False)
             self.assertEqual(dll.read_bytes(), original)
 
-    def test_sfall_ini_is_not_changed_without_explicit_approval(self):
+    def test_sfall_ini_automatically_registers_crc_and_restores(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             self.seed(target, 'stock')
             original = (target / 'ddraw.ini').read_bytes()
             args = self.arguments('stock')
             args.configure_sfall = False
-            with self.assertRaisesRegex(ValueError, 'will NOT change ddraw.ini'):
-                install(args, target)
+            result = install(args, target)
+            self.assertTrue(result['sfall_crc_added'])
+            self.assertTrue(result['sfall_ini_modified'])
+            changed = (target / 'ddraw.ini').read_bytes()
+            self.assertEqual(changed, original.replace(
+                b'ExtraCRC=0x12345678 ; existing mod compatibility',
+                b'ExtraCRC=0x12345678,0xFCDC75E0 ; existing mod compatibility'))
+            restore(target, dry_run=False)
             self.assertEqual((target / 'ddraw.ini').read_bytes(), original)
-            self.assertFalse((target / 'korean_engine_backup_v2').exists())
 
     def test_preconfigured_sfall_crc_does_not_change_ini(self):
         with tempfile.TemporaryDirectory() as directory:
