@@ -156,7 +156,7 @@ class Installer(tk.Tk):
         ttk.Checkbutton(self.advanced_frame, text="기존 메뉴 표시 설정 유지",
                         variable=self.keep_menu).pack(anchor="w", pady=(4, 3))
         ttk.Checkbutton(self.advanced_frame,
-                        text="sfall 호환 설정 적용 (ddraw.ini 수정, 필요할 때만)",
+                        text="모드 전용 HiResMode 추가 호환 설정 (필요한 경우에만)",
                         variable=self.configure_sfall).pack(anchor="w", pady=(4, 3))
 
         actions = ttk.Frame(outer)
@@ -259,7 +259,7 @@ class Installer(tk.Tk):
         if cjk_exe is None or legacy is None:
             raise ValueError("CJK 원본 폴더를 선택하세요. FO2_UPU_CHT_v34의 EXE와 DLL이 필요합니다.")
         # Korean text drawing needs the game/CJK font bridge, not sfall.
-        # The core installer optionally configures a mod's existing sfall.
+        # ExtraCRC is managed automatically; advanced settings cover mod-specific HRP fixes.
         engine.inspect_sfall(target, self.manifest)
 
         profile_spec = self.manifest["profiles"][profile]
@@ -292,9 +292,13 @@ class Installer(tk.Tk):
                     "한국어 출력 연결만 적용합니다.\n"
                     "해당 sfall 버전과 수정 EXE의 실제 게임 호환성은 별도 확인이 필요합니다.",
                     parent=self)
+            setting_notice = ("기존 ddraw.ini에 한국어 EXE용 ExtraCRC를 추가합니다.\n"
+                              if check.get("sfall_crc_added") else
+                              "기존 sfall의 CRC 설정은 변경하지 않습니다.\n")
             if not messagebox.askyesno("설치 확인",
                     "게임 복사본에 한국어 출력 엔진을 설치합니다.\n"
-                    "기존 파일은 자동 백업합니다. 계속할까요?", parent=self):
+                    + setting_notice +
+                    "수정되는 원본 파일은 자동 백업합니다. 계속할까요?", parent=self):
                 return
             arguments.dry_run = False
             outcome = engine.install(arguments, target)
@@ -328,8 +332,8 @@ class Installer(tk.Tk):
             "① Fallout 2 / 호환 모드를 별도 폴더에 준비합니다.\n"
             "   sfall은 순정판 한글 출력에 필수는 아닙니다.\n"
             "   모드가 sfall을 요구하면 기존 구성을 유지하세요.\n"
-            "   수정된 EXE가 sfall과 호환되지 않을 경우 설치가 중단되며\n"
-            "   고급 설정에서 명시적으로 허용할 수 있습니다.\n\n"
+            "   필요한 ExtraCRC는 기존 설정을 보존한 채 자동으로 추가합니다.\n"
+            "   모드별 HiResMode 변경이 필요할 때만 고급 설정을 켜세요.\n\n"
             "② 보유한 FO2_UPU_CHT_v34의 압축을 풀고 폴더를 선택합니다.\n"
             "   EXE와 기존 글꼴 DLL이 같은 폴더에 있어야 합니다.\n\n"
             "③ 설치하기 버튼을 누릅니다.\n"
