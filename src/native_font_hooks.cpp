@@ -5,6 +5,11 @@
 #include <windows.h>
 #include <cstdint>
 #include <cstring>
+#include <algorithm>
+#include <string>
+#ifdef KOREAN_WRAP_TRACE
+#include <cstdio>
+#endif
 
 extern "C" void __cdecl InitFont();
 extern "C" void __cdecl SelectFont(int);
@@ -20,6 +25,8 @@ constexpr uintptr_t kRegisteredCount = 0x51E3B4;
 constexpr uintptr_t kCurrentFont = 0x51E3B0;
 constexpr uintptr_t kGlobalFontCallbacks = 0x51E3B8;
 constexpr uintptr_t kOriginalSetCurrent = 0x442120;
+constexpr uintptr_t kOriginalWordWrap = 0x4BC6F0;
+constexpr unsigned char kWordWrapPrologue[] = {0x56, 0x57, 0x55, 0x83, 0xEC, 0x0C};
 
 struct FontManager {
     int minFont;
@@ -37,6 +44,22 @@ struct FontManager {
 static_assert(sizeof(FontManager) == 44, "Unexpected x86 FontManager layout");
 
 volatile LONG installed = 0;
+#ifdef KOREAN_WRAP_TRACE
+void traceWrap(const char* phase, const void* string, int width, const void* points, const void* count) {
+    char dir[MAX_PATH]{};
+    if (!GetTempPathA(MAX_PATH, dir)) return;
+    strcat_s(dir, "fallout2-korean-wraptrace.log");
+    HANDLE file = CreateFileA(dir, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                              OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return;
+    char message[240]{};
+    int len = snprintf(message, sizeof(message), "%s text=%p width=%d breakpoints=%p count=%p\r\n",
+                       phase, string, width, points, count);
+    DWORD written = 0;
+    if (len > 0) WriteFile(file, message, static_cast<DWORD>(len < 238 ? len : 238), &written, nullptr);
+    CloseHandle(file);
+}
+#endif
 
 int __cdecl charWidth(int character) {
     char text[3]{};
@@ -82,6 +105,26 @@ bool writeManager(FontManager* manager, FontManager const& replacement) {
     std::memcpy(manager, &replacement, sizeof(*manager));
     DWORD unused;
     VirtualProtect(manager, sizeof(*manager), oldProtection, &unused);
+    return true;
+}
+
+bool installWordWrapHook(void* callback) {
+    auto* function = reinterpret_cast<BYTE*>(kOriginalWordWrap);
+    // Other hooks or different game builds may alter this function.
+    // Never force-install over an unfamiliar prologue.
+    if (std::memcmp(function, kWordWrapPrologue, sizeof(kWordWrapPrologue)) != 0)
+        return false;
+    DWORD old = 0;
+    if (!VirtualProtect(function, 5, PAGE_EXECUTE_READWRITE, &old))
+        return false;
+    BYTE jump[5] = {0xE9};
+    auto from = reinterpret_cast<uintptr_t>(function) + sizeof(jump);
+    auto to = reinterpret_cast<uintptr_t>(callback);
+    *reinterpret_cast<int32_t*>(&jump[1]) = static_cast<int32_t>(to - from);
+    std::memcpy(function, jump, sizeof(jump));
+    FlushInstructionCache(GetCurrentProcess(), function, sizeof(jump));
+    DWORD ignored;
+    VirtualProtect(function, 5, old, &ignored);
     return true;
 }
 }
@@ -178,6 +221,102 @@ extern "C" __declspec(naked) void __cdecl NativeLetterSpacing() {
     __asm { ret }
 }
 
+// Original wordWrap scans individual 8-bit bytes and can bisect CP949
+// syllables. Rewrite byte boundaries using Windows CP949 lead/trail decoding.
+// The returned offsets are still byte offsets, as required by Fallout 2.
+extern "C" __declspec(dllexport) int __cdecl KoreanWordWrap(
+    const char* text, int maxWidth, short* positions, short* count) {
+#ifdef KOREAN_WRAP_TRACE
+    traceWrap("ENTER", text, maxWidth, positions, count);
+#endif
+    if (!text || !positions || !count || maxWidth <= 0) return -1;
+    const size_t bytes = strnlen(text, 32768);
+    if (bytes > 32767 || bytes == 32768) return -1;
+
+    // Match the Fallout 2 WORD_WRAP_MAX_COUNT layout.
+    positions[0] = 0;
+    for (int i = 1; i < 64; ++i) positions[i] = -1;
+    *count = 1;
+    if (bytes == 0) { positions[1] = 0; *count = 2; return 0; }
+
+    size_t start = 0;
+    while (start < bytes) {
+#ifdef KOREAN_WRAP_TRACE
+        traceWrap("LINE", text, static_cast<int>(start), positions, count);
+#endif
+        size_t next = start;
+        size_t lastSpace = static_cast<size_t>(-1);
+        while (next < bytes) {
+            if (text[next] == '\r' || text[next] == '\n') break;
+            int charLen = 1;
+            BYTE lead = static_cast<BYTE>(text[next]);
+            if (next + 1 < bytes && IsDBCSLeadByteEx(949, lead)) {
+                wchar_t decoded;
+                if (MultiByteToWideChar(949, MB_ERR_INVALID_CHARS, text + next, 2, &decoded, 1) == 1)
+                    charLen = 2;
+            }
+            std::string segment(text + start, next + charLen - start);
+            if (GetTextWidth(segment.c_str()) > maxWidth) {
+                // At least one character per line, even if it is wider
+                // than the available box. Never split a multibyte syllable.
+                if (next == start) next += charLen;
+                else if (lastSpace != static_cast<size_t>(-1) && lastSpace > start)
+                    next = lastSpace + 1;
+                break;
+            }
+            if (text[next] == ' ' || text[next] == '-') lastSpace = next;
+            next += charLen;
+        }
+        if (next < bytes && text[next] == '\r') ++next;
+        if (next < bytes && text[next] == '\n') ++next;
+        if (next <= start || *count >= 64) return -1;
+        positions[(*count)++] = static_cast<short>(next);
+        start = next;
+    }
+#ifdef KOREAN_WRAP_TRACE
+    traceWrap("EXIT", text, static_cast<int>(*count), positions, count);
+#endif
+    return 0;
+}
+
+extern "C" __declspec(dllexport) int __cdecl KoreanWordWrapForCaller(
+    const char* text, int maxWidth, short* positions, short* count,
+    uintptr_t returnAddress) {
+    const int result = KoreanWordWrap(text, maxWidth, positions, count);
+    if (result != 0) return result;
+    // The vanilla character-editor description card (return from call at
+    // 0x43ACFC) blindly draws every line, even below its fixed-height frame.
+    // The card has no scrolling support. Restrict this one call site until
+    // it has a proper scrollable/reflowable detail panel. Other screens keep
+    // all lines and their own layout rules.
+    if (returnAddress == 0x43AD01 && count && *count > 13)
+        *count = 13; // At most 12 visible lines, preserve CP949 boundaries.
+    return 0;
+}
+
+// Watcom wordWrap(string=EAX, width=EDX, startPtrs=EBX, countPtr=ECX).
+extern "C" __declspec(dllexport, naked) void __cdecl NativeWordWrap() {
+    __asm {
+        pushad
+        // Snapshot ESP: each PUSH changes it, so relative addressing
+        // from ESP during argument construction corrupts subsequent args.
+        mov ebp, esp
+        push dword ptr [ebp+32] // caller return address, for scoped UI layout
+        push dword ptr [ebp+24] // ECX: count pointer
+        push dword ptr [ebp+16] // EBX: breakpoints pointer
+        push dword ptr [ebp+20] // EDX: width
+        push dword ptr [ebp+28] // EAX: string
+        call KoreanWordWrapForCaller
+        add esp, 20
+        // The original routine writes the return status into EBX and
+        // immediately copies it to EAX; both must reflect the same value.
+        mov [esp+16], eax
+        mov [esp+28], eax
+        popad
+        ret
+    }
+}
+
 extern "C" __declspec(dllexport) void __cdecl InitKoreanEngine() {
     if (!inGame()) return;
     if (InterlockedCompareExchange(&installed, 1, 0) != 0) return;
@@ -231,4 +370,6 @@ extern "C" __declspec(dllexport) void __cdecl InitKoreanEngine() {
         }
     }
     OutputDebugStringA("Fallout2 Korean Engine: registered native Watcom font adapter\n");
+    if (!installWordWrapHook(reinterpret_cast<void*>(&NativeWordWrap)))
+        OutputDebugStringA("Fallout2 Korean Engine: word wrapping hook was not installed\n");
 }

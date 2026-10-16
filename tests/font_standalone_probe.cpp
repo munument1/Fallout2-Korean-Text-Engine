@@ -20,7 +20,12 @@ int wmain(int argc, wchar_t** argv) {
     auto split = reinterpret_cast<int(__cdecl*)(const char*, short*, short*, int)>(GetProcAddress(dll, "SplitText"));
     auto outputL = reinterpret_cast<void(__cdecl*)(const char*, int, int, int*, BYTE*, int)>(GetProcAddress(dll, "TextOutputL"));
     auto outputX = reinterpret_cast<int(__cdecl*)(const char*, int*, int*, int, BYTE*, int)>(GetProcAddress(dll, "TextOutputX"));
-    if (!init || !clear || !select || !getWidth || !getHeight || !output || !split || !outputL || !outputX) return 4;
+    auto wordWrap = reinterpret_cast<int(__cdecl*)(const char*, int, short*, short*)>(GetProcAddress(dll, "KoreanWordWrap"));
+    auto scopedWordWrap = reinterpret_cast<int(__cdecl*)(const char*, int, short*, short*, uintptr_t)>(GetProcAddress(dll, "KoreanWordWrapForCaller"));
+    auto nativeWordWrap = GetProcAddress(dll, "NativeWordWrap");
+    if (!init || !clear || !select || !getWidth || !getHeight ||
+        !output || !split || !outputL || !outputX ||
+        !wordWrap || !scopedWordWrap || !nativeWordWrap) return 4;
     init();
     if (GetModuleHandleW(L"fallout2font_legacy.dll")) return 5;
     int failures = 0;
@@ -71,6 +76,80 @@ int wmain(int argc, wchar_t** argv) {
         int rect[4] = {0, 0, 256, 89};
         outputX("Hello world", &offset, rect, 256, buffer.data(), 200);
         if (offset != 0 || rect[1] <= 0) ++failures;
+        if (wordWrap) {
+            // Fallout's stock wordWrap was byte-oriented and bisected CP949.
+            // Ensure our replacement returns byte positions at valid glyph boundaries.
+            std::string paragraph;
+            for (int k = 0; k < 54; ++k) {
+                wchar_t ch = static_cast<wchar_t>(0xac00 + k * 3);
+                char tmp[4]{};
+                int n = WideCharToMultiByte(949, 0, &ch, 1, tmp, 4, nullptr, nullptr);
+                paragraph.append(tmp, n);
+                if (k % 7 == 6) paragraph.push_back(' ');
+            }
+            std::vector<char> stable(paragraph.begin(), paragraph.end());
+            short points[65]{}, count = 0;
+            points[64] = 0x1234;  // array guard
+            if (wordWrap(paragraph.c_str(), 90, points, &count) != 0 ||
+                points[0] != 0 || points[count - 1] != paragraph.size() ||
+                count < 3 || count > 64 || points[64] != 0x1234)
+                ++failures;
+            else {
+                for (int n = 1; n < count; ++n) {
+                    int length = points[n] - points[n - 1];
+                    wchar_t decoded[512]{};
+                    if (length <= 0 ||
+                        MultiByteToWideChar(949, MB_ERR_INVALID_CHARS,
+                                            paragraph.data() + points[n - 1],
+                                            length, decoded, 512) <= 0 ||
+                        getWidth(paragraph.substr(points[n - 1], length).c_str()) > 90)
+                        ++failures;
+                }
+            }
+            if (stable != std::vector<char>(paragraph.begin(), paragraph.end())) ++failures;
+            if (wordWrap("", 90, points, &count) != 0 ||
+                count != 2 || points[0] != 0 || points[1] != 0)
+                ++failures;
+            if (wordWrap(paragraph.c_str(), 0, points, &count) != -1) ++failures;
+            if (scopedWordWrap) {
+                std::string longText(220, 'A');
+                short general[65]{}, scoped[65]{}, ordinaryCount = 0, cardCount = 0;
+                int generalStatus = scopedWordWrap(longText.c_str(), 75, general, &ordinaryCount, 0x123456);
+                int cardStatus = scopedWordWrap(longText.c_str(), 75, scoped, &cardCount, 0x43ad01);
+                if (generalStatus != 0 || cardStatus != 0 || ordinaryCount <= 13 ||
+                    cardCount != 13 || general[12] != scoped[12]) ++failures;
+            }
+            if (nativeWordWrap) {
+                short nativePoints[65]{}, directPoints[65]{};
+                short nativeCount = 0, directCount = 0;
+                auto* ptrText = paragraph.c_str();
+                auto* ptrPoints = nativePoints;
+                auto* ptrCount = &nativeCount;
+                void* entry = reinterpret_cast<void*>(nativeWordWrap);
+                int eaxResult = 100, ebxResult = 100;
+                int beforeESP = 0, afterESP = 0;
+                __asm {
+                    push ebx
+                    mov eax, ptrText
+                    mov edx, 90
+                    mov ebx, ptrPoints
+                    mov ecx, ptrCount
+                    mov beforeESP, esp
+                    call entry
+                    mov afterESP, esp
+                    mov eaxResult, eax
+                    mov ebxResult, ebx
+                    pop ebx
+                }
+                int directResult = wordWrap(paragraph.c_str(), 90, directPoints, &directCount);
+                if (eaxResult != directResult || ebxResult != directResult ||
+                    beforeESP != afterESP || nativeCount != directCount)
+                    ++failures;
+                else
+                    for (int i = 0; i < nativeCount; ++i)
+                        if (nativePoints[i] != directPoints[i]) ++failures;
+            }
+        }
     }
     clear();
     if (GetModuleHandleW(L"fallout2font_legacy.dll")) ++failures;
