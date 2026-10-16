@@ -13,6 +13,17 @@ import pefile
 ROOT = Path(__file__).resolve().parents[1]
 MAX_PREVIEW_SPANS = 24
 
+# Investigative addresses from Korean sfall FunctionOffsets_def.h (US 1.02d).
+# These are clues, not validated signatures or permission to patch.
+LEGACY_FONT_HOOKS = {
+    "FMtext_height_": 0x442168,
+    "GNW_text_height_": 0x4D5B54,
+    "FMtext_width_": 0x442188,
+    "GNW_text_width_": 0x4D5B60,
+    "FMtext_to_buf_": 0x4422B4,
+    "GNW_text_to_buf_": 0x4D59B0,
+}
+
 
 def sha256(data):
     return hashlib.sha256(data).hexdigest()
@@ -77,6 +88,7 @@ def describe_pe(raw, label):
                 "raw_size": item.SizeOfRawData,
                 "virtual_size": item.Misc_VirtualSize,
                 "raw_offset": item.PointerToRawData,
+                "executable": bool(item.Characteristics & 0x20000000),
             })
         return {
             "name": label, "sha256": sha256(raw),
@@ -110,6 +122,24 @@ def compare_sections(a, b, raw_a, raw_b):
     return comparison
 
 
+def assess_legacy_font_hooks(original_description):
+    """Map historical addresses into PE sections without writing executable code."""
+    image_base = original_description["image_base"]
+    results = []
+    for name, address in LEGACY_FONT_HOOKS.items():
+        rva = address - image_base
+        matches = [sec for sec in original_description["sections"]
+                   if sec["rva"] <= rva <
+                   sec["rva"] + max(sec["raw_size"], sec["virtual_size"])]
+        section = matches[0] if matches else None
+        results.append({
+            "symbol": name, "virtual_address": address,
+            "rva": rva, "section": section["name"] if section else None,
+            "in_executable_section": bool(section and section["executable"]),
+            "verified_instruction_signature": False,
+        })
+    return results
+
 def build_report(original, cjk, manifest, mod_data=None):
     expected = {"original": manifest["stock_sha256"],
                 "cjk": manifest["cjk_exe_sha256"]}
@@ -128,6 +158,7 @@ def build_report(original, cjk, manifest, mod_data=None):
         "new_cjk_imports": extra,
         "common_import_dlls": sorted(set(base["imports"]) & set(donor["imports"])),
         "section_differences": compare_sections(base, donor, original, cjk),
+        "legacy_font_hook_locations": assess_legacy_font_hooks(base),
         "assessment": {
             "disk_exe_unchanged": True,
             "sfall_files_unchanged": True,
