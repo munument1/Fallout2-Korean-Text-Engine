@@ -1,7 +1,7 @@
 diff --git a/sfall/CRC.cpp b/sfall/CRC.cpp
 --- a/sfall/CRC.cpp
 +++ b/sfall/CRC.cpp
-@@ -31,8 +31,9 @@ namespace sfall
+@@ -30,8 +30,9 @@ namespace sfall
  
  static const DWORD ExpectedSize = 1189888;
  static const DWORD ExpectedCRC[] = {
