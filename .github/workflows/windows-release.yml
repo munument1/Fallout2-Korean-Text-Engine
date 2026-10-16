@@ -1,4 +1,4 @@
-name: Build Windows installer and publish first beta
+name: Build and publish Windows installer
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
       - "fallout2font.ini"
       - "requirements.txt"
       - "README.md"
-      - "docs/RELEASE_NOTES_BETA.md"
+      - "docs/RELEASE_NOTES.md"
       - ".github/workflows/windows-release.yml"
   pull_request:
   workflow_dispatch:
@@ -62,22 +62,22 @@ jobs:
       - name: Upload tested build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: fallout2-korean-text-engine-beta
+          name: fallout2-korean-text-engine-windows
           path: |
             dist/Fallout2-Korean-Text-Engine-Setup.exe
             dist/korean-text-engine.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
-      - name: Publish first beta prerelease if not yet released
+      - name: Publish official v1.0.0 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "v0.1.0-beta" --repo "$env:GITHUB_REPOSITORY" *> $null
+          gh release view "v1.0.0" --repo "$env:GITHUB_REPOSITORY" *> $null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "v0.1.0-beta already exists; not overwriting release assets."
+            Write-Host "v1.0.0 already exists; not overwriting release assets."
             exit 0
           }
-          gh release create "v0.1.0-beta" "dist/Fallout2-Korean-Text-Engine-Setup.exe" "dist/korean-text-engine.zip" "dist/SHA256SUMS.txt" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "Fallout 2 Korean Text Engine v0.1.0-beta" --notes-file "docs/RELEASE_NOTES_BETA.md" --prerelease
-          if ($LASTEXITCODE -ne 0) { throw "Unable to publish beta release." }
+          gh release create "v1.0.0" "dist/Fallout2-Korean-Text-Engine-Setup.exe" "dist/korean-text-engine.zip" "dist/SHA256SUMS.txt" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "Fallout 2 Korean Text Engine v1.0.0" --notes-file "docs/RELEASE_NOTES.md" --latest
+          if ($LASTEXITCODE -ne 0) { throw "Unable to publish official release." }
