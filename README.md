@@ -10,7 +10,7 @@ Python이나 명령어 입력 없이 실행할 수 있습니다.
 
 ## 설치 방법
 
-1. **게임 준비:** Fallout 2 또는 지원 모드를 별도 폴더에 준비하고 [공식 sfall 4.5.1](https://github.com/sfall-team/sfall/releases/tag/v4.5.1)을 적용합니다.
+1. **게임 준비:** Fallout 2 또는 지원 모드를 별도 폴더에 준비합니다. **순정 Fallout 2의 한글 출력에 sfall을 따로 설치할 필요는 없습니다.** 모드에 sfall이 포함되어 있다면 기존 파일을 그대로 둡니다.
 2. **설치기 실행:** 게임 폴더와 직접 확보한 **FO2_UPU_CHT_v34의 CJK 파일 폴더**를 선택합니다.
 3. **「설치하기」 클릭:** 파일을 자동 검사하고 설치합니다. 설치 후 **게임별 한국어 번역 패치**를 별도로 적용하면 됩니다.
 
@@ -22,17 +22,19 @@ CJK 원본 폴더에는 해당 패키지의 \`Fallout2.exe\`와 \`fallout2font.d
 
 Fallout 2 원본 / Restoration Project Updated / Fallout Et Tu / Fallout Sonora / Fallout Nevada Extended / Olympus 2207 / Fallout 1.5 Resurrection
 
-지원은 **검증된 게임·모드 버전**에 한합니다. 다른 버전의 실행 파일은 안전을 위해 패치를 거부합니다. 자세한 버전별 정보는 [기술 문서](docs/TECHNICAL.md)를 확인하세요.
+지원은 **검증된 게임·모드 버전**에 한합니다. 일부 모드는 게임 자체의 기능을 위해 sfall이 필요할 수 있으며, 이 출력 엔진이 그 의존성을 대신하지는 않습니다. 다른 버전의 실행 파일은 안전을 위해 패치를 거부합니다. 자세한 버전별 정보는 [기술 문서](docs/TECHNICAL.md)를 확인하세요.
 
 ## 알아두기
 
 - 이 프로그램은 **한국어 출력 엔진**입니다. 대사·책·인터페이스의 번역 데이터는 각 모드의 한국어 패치에서 별도로 제공합니다.
 - 게임 EXE, 공식 sfall DLL 및 외부 CJK 원본 파일은 배포하지 않습니다. 이용자가 직접 확보한 파일을 사용합니다.
 - 원본 Steam 설치 경로는 보호 대상이므로 **게임 복사본**에 설치하세요.
+- 기존 sfall이 있으면 DLL을 바꾸지 않고 `ddraw.ini`의 호환 설정만 추가합니다. sfall이 없는 순정판은 `ddraw.ini`를 새로 만들지 않습니다.
+- **주의:** sfall 없는 실제 게임 구동은 별도로 확인해야 합니다. 현재 정식 v1.0.0 릴리즈는 이 변경을 아직 포함하지 않습니다.
 - 오류가 나면 [Issues](https://github.com/munument1/Fallout2-Korean-Text-Engine/issues)에 게임 버전과 오류 메시지를 남겨 주세요.
 
 ## 개발자용 자료
 
-[고급 설치·구조 설명](docs/TECHNICAL.md) · [게임별 검증 기록](docs/validation.json) · [테스트 안내](docs/TESTING.md) · [개발자용 ZIP](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/latest)
+[sfall 분리 구조](docs/SFALL_INDEPENDENCE.md) · [고급 설치·구조 설명](docs/TECHNICAL.md) · [게임별 검증 기록](docs/validation.json) · [테스트 안내](docs/TESTING.md) · [개발자용 ZIP](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/latest)
 
 새 출력 어댑터 및 설치 도구는 MIT, Galmuri 글꼴은 OFL 라이선스를 따릅니다.
