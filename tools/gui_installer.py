@@ -254,9 +254,9 @@ class Installer(tk.Tk):
         cjk_exe, legacy = find_cjk_files(self.cjk_folder.get(), self.manifest)
         if cjk_exe is None or legacy is None:
             raise ValueError("CJK 원본 폴더를 선택하세요. FO2_UPU_CHT_v34의 EXE와 DLL이 필요합니다.")
-        sfall = target / "ddraw.dll"
-        if not sfall.is_file() or sha(sfall.read_bytes()) != self.manifest["official_sfall_sha256"]:
-            raise ValueError("게임 폴더에 공식 sfall 4.5.1의 ddraw.dll이 있어야 합니다.")
+        # Korean text drawing needs the game/CJK font bridge, not sfall.
+        # The core installer optionally configures a mod's existing sfall.
+        engine.inspect_sfall(target, self.manifest)
 
         profile_spec = self.manifest["profiles"][profile]
         game_exe = target / profile_spec["exe"]
@@ -282,6 +282,12 @@ class Installer(tk.Tk):
             target, arguments = self._arguments(dry_run=True)
             check = engine.install(arguments, target)
             self._append("설치 검사: " + json.dumps(check, ensure_ascii=False))
+            if check["sfall_status"] == "existing-unverified":
+                messagebox.showwarning("기존 sfall 버전",
+                    "설치된 sfall은 유지됩니다. 기존 파일과 설정을 보존하며 "
+                    "한국어 출력 연결만 적용합니다.\n"
+                    "해당 sfall 버전과 수정 EXE의 실제 게임 호환성은 별도 확인이 필요합니다.",
+                    parent=self)
             if not messagebox.askyesno("설치 확인",
                     "게임 복사본에 한국어 출력 엔진을 설치합니다.\n"
                     "기존 파일은 자동 백업합니다. 계속할까요?", parent=self):
@@ -316,7 +322,8 @@ class Installer(tk.Tk):
     def _help(self):
         messagebox.showinfo("간단 설치 안내",
             "① Fallout 2 / 호환 모드를 별도 폴더에 준비합니다.\n"
-            "   공식 sfall 4.5.1이 설치돼 있어야 합니다.\n\n"
+            "   sfall은 한글 출력에 필수는 아닙니다.\n"
+            "   다만 이용하는 모드가 sfall을 요구하면 기존 구성을 유지하세요.\n\n"
             "② 보유한 FO2_UPU_CHT_v34의 압축을 풀고 폴더를 선택합니다.\n"
             "   EXE와 기존 글꼴 DLL이 같은 폴더에 있어야 합니다.\n\n"
             "③ 설치하기 버튼을 누릅니다.\n"
