@@ -118,6 +118,7 @@ class Installer(tk.Tk):
         self.profile_title = tk.StringVar()
         self.base = tk.StringVar()
         self.keep_menu = tk.BooleanVar(value=False)
+        self.configure_sfall = tk.BooleanVar(value=False)
         self.advanced = tk.BooleanVar(value=False)
         self.summary = tk.StringVar(value="게임 폴더를 선택해 주세요.")
         self.cjk_summary = tk.StringVar(value="CJK 파일을 압축 해제한 폴더를 선택해 주세요.")
@@ -154,6 +155,9 @@ class Installer(tk.Tk):
         self._file_row(self.advanced_frame, "원본 Fallout 2 US 1.02d EXE (일부 모드에서 필요)", self.base)
         ttk.Checkbutton(self.advanced_frame, text="기존 메뉴 표시 설정 유지",
                         variable=self.keep_menu).pack(anchor="w", pady=(4, 3))
+        ttk.Checkbutton(self.advanced_frame,
+                        text="sfall 호환 설정 적용 (ddraw.ini 수정, 필요할 때만)",
+                        variable=self.configure_sfall).pack(anchor="w", pady=(4, 3))
 
         actions = ttk.Frame(outer)
         self.actions = actions
@@ -275,7 +279,7 @@ class Installer(tk.Tk):
         return target, argparse.Namespace(
             profile=profile, cjk_exe=cjk_exe, legacy_font=legacy,
             base_exe=stock, keep_menu_settings=self.keep_menu.get(),
-            dry_run=dry_run)
+            configure_sfall=self.configure_sfall.get(), dry_run=dry_run)
 
     def _install(self):
         try:
@@ -322,8 +326,10 @@ class Installer(tk.Tk):
     def _help(self):
         messagebox.showinfo("간단 설치 안내",
             "① Fallout 2 / 호환 모드를 별도 폴더에 준비합니다.\n"
-            "   sfall은 한글 출력에 필수는 아닙니다.\n"
-            "   다만 이용하는 모드가 sfall을 요구하면 기존 구성을 유지하세요.\n\n"
+            "   sfall은 순정판 한글 출력에 필수는 아닙니다.\n"
+            "   모드가 sfall을 요구하면 기존 구성을 유지하세요.\n"
+            "   수정된 EXE가 sfall과 호환되지 않을 경우 설치가 중단되며\n"
+            "   고급 설정에서 명시적으로 허용할 수 있습니다.\n\n"
             "② 보유한 FO2_UPU_CHT_v34의 압축을 풀고 폴더를 선택합니다.\n"
             "   EXE와 기존 글꼴 DLL이 같은 폴더에 있어야 합니다.\n\n"
             "③ 설치하기 버튼을 누릅니다.\n"
