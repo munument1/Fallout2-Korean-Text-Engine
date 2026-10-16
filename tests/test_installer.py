@@ -45,7 +45,7 @@ class InstallerTests(unittest.TestCase):
     def arguments(self, profile, dry_run=False):
         return argparse.Namespace(profile=profile, cjk_exe=Path(self.inputs['cjk_exe']),
                                   legacy_font=Path(self.inputs['legacy_font']), base_exe=Path(self.inputs['stock']),
-                                  keep_menu_settings=False, dry_run=dry_run)
+                                  keep_menu_settings=False, configure_sfall=True, dry_run=dry_run)
 
     def test_derived_runtime_matches_game_tested_builds_and_restores(self):
         for profile, spec in self.manifest['profiles'].items():
@@ -109,6 +109,36 @@ class InstallerTests(unittest.TestCase):
             self.assertIn(b'ExtraCRC=', (target / 'ddraw.ini').read_bytes())
             restore(target, dry_run=False)
             self.assertEqual(dll.read_bytes(), original)
+
+    def test_sfall_ini_is_not_changed_without_explicit_approval(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self.seed(target, 'stock')
+            original = (target / 'ddraw.ini').read_bytes()
+            args = self.arguments('stock')
+            args.configure_sfall = False
+            with self.assertRaisesRegex(ValueError, 'will NOT change ddraw.ini'):
+                install(args, target)
+            self.assertEqual((target / 'ddraw.ini').read_bytes(), original)
+            self.assertFalse((target / 'korean_engine_backup_v2').exists())
+
+    def test_preconfigured_sfall_crc_does_not_change_ini(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self.seed(target, 'stock')
+            required_crc = self.manifest['profiles']['stock']['sfall_crc']
+            ini = target / 'ddraw.ini'
+            ini.write_bytes(ini.read_bytes() + ('ExtraCRC=' + required_crc + '\\r\\n').encode())
+            # Make the added assignment the only active ExtraCRC.
+            before = ini.read_bytes().replace(b'ExtraCRC=0x12345678 ; existing mod compatibility', b'; kept for history')
+            ini.write_bytes(before)
+            args = self.arguments('stock')
+            args.configure_sfall = False
+            result = install(args, target)
+            self.assertFalse(result['sfall_ini_modified'])
+            self.assertEqual(ini.read_bytes(), before)
+            restore(target, dry_run=False)
+            self.assertEqual(ini.read_bytes(), before)
 
     def test_stock_without_sfall_or_ini(self):
         with tempfile.TemporaryDirectory() as directory:
