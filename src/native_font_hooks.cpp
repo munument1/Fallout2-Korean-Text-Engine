@@ -282,16 +282,12 @@ extern "C" __declspec(dllexport) int __cdecl KoreanWordWrap(
 extern "C" __declspec(dllexport) int __cdecl KoreanWordWrapForCaller(
     const char* text, int maxWidth, short* positions, short* count,
     uintptr_t returnAddress) {
-    const int result = KoreanWordWrap(text, maxWidth, positions, count);
-    if (result != 0) return result;
-    // The vanilla character-editor description card (return from call at
-    // 0x43ACFC) blindly draws every line, even below its fixed-height frame.
-    // The card has no scrolling support. Restrict this one call site until
-    // it has a proper scrollable/reflowable detail panel. Other screens keep
-    // all lines and their own layout rules.
-    if (returnAddress == 0x43AD01 && count && *count > 13)
-        *count = 13; // At most 12 visible lines, preserve CP949 boundaries.
-    return 0;
+    // Never discard text solely because the UI card has a limited height.
+    // Doing so regressed content visibility relative to existing Korean
+    // translations. Retain all valid CP949 line offsets for every caller;
+    // reflow/layout must be handled separately, without truncation.
+    (void)returnAddress;
+    return KoreanWordWrap(text, maxWidth, positions, count);
 }
 
 // Watcom wordWrap(string=EAX, width=EDX, startPtrs=EBX, countPtr=ECX).
