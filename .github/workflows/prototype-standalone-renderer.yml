@@ -29,6 +29,7 @@ jobs:
           cl /nologo /std:c++17 /EHsc /O2 /MT /LD /utf-8 /Fobuild\standalone\ src\font_standalone.cpp src\native_font_hooks.cpp /link /Brepro /DEF:src\font_bridge.def /OUT:build\standalone\fallout2font.dll gdi32.lib user32.lib
           cl /nologo /std:c++17 /EHsc /O2 /MT /utf-8 /Febuild\standalone\font_standalone_probe.exe tests\font_standalone_probe.cpp user32.lib
           cl /nologo /std:c++17 /EHsc /O2 /MT /utf-8 /Febuild\standalone\real_translation_wrap_probe.exe tests\real_translation_wrap_probe.cpp user32.lib
+          cl /nologo /std:c++17 /EHsc /O2 /MT /utf-8 /Febuild\standalone\dialog_wrap_probe.exe tests\dialog_wrap_probe.cpp user32.lib
       - name: Validate 11,172 Hangul and guard bytes without third-party DLL
         shell: pwsh
         run: |
@@ -38,6 +39,10 @@ jobs:
           Copy-Item fonts/Galmuri11.ttf build/standalone/fonts/Galmuri11.ttf
           & build/standalone/font_standalone_probe.exe (Resolve-Path build/standalone/fallout2font.dll).Path
           if ($LASTEXITCODE -ne 0) { throw "Standalone renderer probe failed" }
+          python tests/generate_dialog_fixture.py build/standalone/dialog-fixture
+          if ($LASTEXITCODE -ne 0) { throw "Synthetic dialogue fixture generation failed" }
+          & build/standalone/dialog_wrap_probe.exe (Resolve-Path build/standalone/fallout2font.dll).Path (Resolve-Path build/standalone/dialog-fixture).Path 320
+          if ($LASTEXITCODE -ne 0) { throw "Native dialogue wrap probe failed" }
           if (Test-Path build/standalone/fallout2font_legacy.dll) { throw "Unexpected legacy DLL dependency" }
       - name: Build game-folder-only CJK-independent installer
         shell: pwsh
