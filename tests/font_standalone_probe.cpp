@@ -116,8 +116,13 @@ int wmain(int argc, wchar_t** argv) {
                 short general[65]{}, scoped[65]{}, ordinaryCount = 0, cardCount = 0;
                 int generalStatus = scopedWordWrap(longText.c_str(), 75, general, &ordinaryCount, 0x123456);
                 int cardStatus = scopedWordWrap(longText.c_str(), 75, scoped, &cardCount, 0x43ad01);
+                // The card caller must not lose any lines/characters.
                 if (generalStatus != 0 || cardStatus != 0 || ordinaryCount <= 13 ||
-                    cardCount != 13 || general[12] != scoped[12]) ++failures;
+                    cardCount != ordinaryCount ||
+                    scoped[cardCount - 1] != longText.size()) ++failures;
+                else
+                    for (int k = 0; k < cardCount; ++k)
+                        if (general[k] != scoped[k]) ++failures;
             }
             if (nativeWordWrap) {
                 short nativePoints[65]{}, directPoints[65]{};
