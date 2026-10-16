@@ -1,0 +1,14 @@
+diff --git a/sfall/CRC.cpp b/sfall/CRC.cpp
+--- a/sfall/CRC.cpp
++++ b/sfall/CRC.cpp
+@@ -31,8 +31,9 @@ namespace sfall
+ 
+ static const DWORD ExpectedSize = 1189888;
+ static const DWORD ExpectedCRC[] = {
+ 	0xE1680293, // US 1.02d
+-	0xEF34F989  // US 1.02d + HRP by Mash
++	0xEF34F989, // US 1.02d + HRP by Mash
++	0xFCDC75E0  // Korean CJK-compatible 1.02d (verified fixed build)
+ };
+ 
+ static void inline ExitMessageFail(const char* a) {
