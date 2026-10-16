@@ -126,7 +126,13 @@ class Installer(tk.Tk):
         self.minsize(650, 485)
         self.manifest = manifest_data()
         self.experimental = (engine.ROOT / "standalone-font.dll").is_file()
-        self.auto_source = tk.BooleanVar(value=self.experimental)
+        self.native_mode = False
+        if self.experimental:
+            native = pefile.PE(data=(engine.ROOT / "standalone-font.dll").read_bytes())
+            exports = {symbol.name.decode("ascii") for symbol in native.DIRECTORY_ENTRY_EXPORT.symbols
+                       if symbol.name}
+            self.native_mode = "InitKoreanEngine" in exports
+        self.auto_source = tk.BooleanVar(value=self.experimental and not self.native_mode)
         self.target = tk.StringVar()
         self.cjk_folder = tk.StringVar()
         self.profile_title = tk.StringVar()
@@ -145,7 +151,9 @@ class Installer(tk.Tk):
 
         ttk.Label(outer, text="Fallout 2 한국어 출력 엔진",
                   font=("Malgun Gothic", 17, "bold")).pack(anchor="w")
-        ttk.Label(outer, text=("시험판: 게임 폴더만 선택 → 확인 후 설치. 기존 파일 자동 백업."
+        ttk.Label(outer, text=("독립형 시험판: 순정 Fallout 2 폴더 하나만 선택하세요."
+                               if self.native_mode else
+                               "시험판: 게임 폴더만 선택 → 확인 후 설치. 기존 파일 자동 백업."
                                if self.experimental else
                                "폴더 2개 선택 → 설치. 기존 파일은 자동으로 백업합니다."),
                   font=("Malgun Gothic", 10)).pack(anchor="w", pady=(4, 14))
@@ -160,7 +168,11 @@ class Installer(tk.Tk):
                                   width=48)
         self.combo.pack(anchor="w", pady=(2, 10))
 
-        if self.experimental:
+        if self.native_mode:
+            ttk.Label(outer,
+                      text="순정 US 1.02d EXE에 자체 한국어 훅을 적용합니다. CJK 파일/외부 다운로드 불필요.",
+                      foreground="#555", wraplength=670).pack(anchor="w", pady=(2, 8))
+        elif self.experimental:
             ttk.Label(outer, text="독립형 글꼴 렌더러 시험판: 기존 CJK DLL은 사용하지 않습니다.",
                       foreground="#555", wraplength=670).pack(anchor="w")
             ttk.Checkbutton(outer,
@@ -263,6 +275,8 @@ class Installer(tk.Tk):
         try:
             path = engine.validate_target(path)
             matches = detect_profiles(path, self.manifest)
+            if self.native_mode:
+                matches = [key for key in matches if key == "stock"]
             self.combo.configure(values=[PROFILE_TITLES[key] for key in matches])
             selected = guess_profile(path, matches)
             if selected:
@@ -278,6 +292,8 @@ class Installer(tk.Tk):
             self.summary.set(str(exc))
 
     def _inspect_cjk(self):
+        if self.native_mode:
+            return
         if self.experimental:
             cjk = _matching_file(self.cjk_folder.get(), "Fallout2.exe",
                                  self.manifest["cjk_exe_sha256"])
@@ -297,7 +313,10 @@ class Installer(tk.Tk):
         profile = PROFILE_BY_TITLE.get(self.profile_title.get())
         if not profile or profile not in detect_profiles(target, self.manifest):
             raise ValueError("지원하는 게임 종류를 선택하세요. 원본 파일 버전이 다르면 설치할 수 없습니다.")
-        if self.experimental:
+        if self.native_mode:
+            cjk_exe, legacy = None, None
+            standalone = engine.ROOT / "standalone-font.dll"
+        elif self.experimental:
             if self.auto_source.get():
                 if download_directory is None:
                     raise ValueError("Temporary CJK download folder is missing.")
@@ -338,12 +357,13 @@ class Installer(tk.Tk):
         return target, argparse.Namespace(
             profile=profile, cjk_exe=cjk_exe, legacy_font=legacy,
             standalone_font=standalone,
+            native_exe=self.native_mode,
             base_exe=stock, keep_menu_settings=self.keep_menu.get(),
             configure_sfall=self.configure_sfall.get(), dry_run=dry_run)
 
     def _install(self):
         try:
-            if self.experimental and self.auto_source.get():
+            if self.experimental and not self.native_mode and self.auto_source.get():
                 if not messagebox.askyesno(
                     "CJK 실행 파일 임시 다운로드",
                     "자체 한글 렌더러는 중국어 글꼴 DLL을 사용하지 않습니다.\n"
@@ -403,6 +423,16 @@ class Installer(tk.Tk):
             messagebox.showerror("복구할 수 없습니다", str(exc), parent=self)
 
     def _help(self):
+        if self.native_mode:
+            messagebox.showinfo("순정 EXE 독립형 한글 엔진 시험판",
+                "① Fallout 2 US 1.02d를 새 폴더에 복사합니다.\n"
+                "② 복사본 폴더만 선택하세요. 중국어 CJK 파일/다운로드는 필요 없습니다.\n"
+                "③ 우리 자체 EXE 훅과 한글 DLL을 설치하고 파일을 백업합니다.\n"
+                "④ 공식 sfall이 있다면 ExtraCRC를 자동 등록합니다.\n"
+                "⑤ 메뉴, 캐릭터 생성, 대화, 인벤토리, 전투, 저장/불러오기를 확인하세요.\n\n"
+                "RPU/Et Tu 전용 EXE는 아직 미지원입니다. 테스트용 복사본만 사용하세요.",
+                parent=self)
+            return
         if self.experimental:
             messagebox.showinfo("독립 렌더러 시험판 안내",
                 "① 게임을 안전한 별도 폴더에 복사합니다.\n"

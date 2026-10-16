@@ -9,8 +9,10 @@ from pathlib import Path
 import pefile
 if __package__:
     from .runtime import korean_exe, sfall_crc, sha, put_ini, decode_ini
+    from .native_pe import native_exe
 else:
     from runtime import korean_exe, sfall_crc, sha, put_ini, decode_ini
+    from native_pe import native_exe
 
 ROOT = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
 STEAM = Path(r'C:\Games\Steam\steamapps\common\Fallout 2').resolve()
@@ -224,7 +226,11 @@ def install(args, target):
     sfall = inspect_sfall(target, manifest)
     sfall_path = checked_destination(target, 'ddraw.dll')
     sfall_hash = sfall['hash']
-    donor = args.cjk_exe.read_bytes()
+    native_mode = bool(getattr(args, 'native_exe', False))
+    if native_mode and (args.profile != 'stock' or not getattr(args, 'standalone_font', None)):
+        raise ValueError('Independent EXE patch is currently validated only for stock US 1.02d with native font DLL.')
+    if native_mode and (getattr(args, 'cjk_exe', None) or getattr(args, 'legacy_font', None)):
+        raise ValueError('Independent EXE mode must not receive Chinese CJK binaries.')
     standalone_path = getattr(args, 'standalone_font', None)
     if standalone_path:
         standalone_data = Path(standalone_path).read_bytes()
@@ -238,23 +244,29 @@ def install(args, target):
                     'TextOutput', 'TextOutputL', 'TextOutputX', 'SplitText'}
         if not required <= symbols or b'fallout2font_legacy.dll' in standalone_data:
             raise ValueError('Standalone font ABI validation failed.')
+        if native_mode and 'InitKoreanEngine' not in symbols:
+            raise ValueError('Native game executable needs InitKoreanEngine DLL export.')
         legacy = None
     else:
         legacy = args.legacy_font.read_bytes()
         if sha(legacy) != manifest['legacy_font_sha256']:
             raise ValueError('Unsupported user-supplied legacy font DLL.')
-    stock = original if sha(original) == manifest['stock_sha256'] else args.base_exe.read_bytes() if args.base_exe else None
-    if stock is None:
-        raise ValueError('--base-exe pointing to stock US 1.02d is required for a custom mod EXE.')
-    patched, preserved = korean_exe(original, stock, donor, manifest)
-    if sha(patched) != profile['patched_sha256']:
-        raise ValueError('Derived EXE does not match the game-tested build.')
+    if native_mode:
+        patched, preserved = native_exe(original), 0
+    else:
+        donor = args.cjk_exe.read_bytes()
+        stock = original if sha(original) == manifest['stock_sha256'] else args.base_exe.read_bytes() if args.base_exe else None
+        if stock is None:
+            raise ValueError('--base-exe pointing to stock US 1.02d is required for a custom mod EXE.')
+        patched, preserved = korean_exe(original, stock, donor, manifest)
+        if sha(patched) != profile['patched_sha256']:
+            raise ValueError('Derived CJK EXE does not match the verified profile.')
     # CRC is a compatibility setting for sfall; the Korean renderer does not
     # need the DLL. We still verify the derived EXE independently above.
     crc = None
     if sfall['enabled']:
         crc = f'0x{sfall_crc(patched, manifest["crc_table"]):08X}'
-        if crc != profile['sfall_crc']:
+        if not native_mode and crc != profile['sfall_crc']:
             raise ValueError('Derived EXE CRC mismatch.')
     payload = {profile['exe']: patched}
     if legacy is not None:
@@ -319,7 +331,8 @@ def install(args, target):
         if path.with_name(path.name + '.korean-tmp').exists():
             raise ValueError('Unfinished temporary installation file found.')
     report = {'operation': 'install', 'profile': args.profile, 'dry_run': args.dry_run,
-              'renderer': 'experimental-standalone' if standalone_path else 'legacy-cjk-bridge',
+              'renderer': 'native-no-cjk' if native_mode else
+                          'experimental-standalone' if standalone_path else 'legacy-cjk-bridge',
               'sfall_unchanged': True, 'sfall_status': sfall['status'],
               'sfall_ini_modified': 'ddraw.ini' in payload,
               'sfall_crc_added': sfall_crc_added,
@@ -367,6 +380,8 @@ def main():
     parser.add_argument('--legacy-font', type=Path)
     parser.add_argument('--standalone-font', type=Path,
                         help='Experiment only: independently compiled font DLL; no Chinese legacy font DLL')
+    parser.add_argument('--native-exe', action='store_true',
+                        help='EXPERIMENT: patch exact stock US 1.02d from scratch, no CJK binary or download')
     parser.add_argument('--auto-cjk-exe', action='store_true',
                         help='Explicit opt-in: temporarily download a hash-pinned upstream CJK EXE')
     parser.add_argument('--base-exe', type=Path)
@@ -385,9 +400,14 @@ def main():
                 parser.error('--profile and exactly one font DLL mode are required')
             if args.legacy_font and args.standalone_font:
                 parser.error('Choose --legacy-font OR --standalone-font, not both')
+            if args.native_exe and (args.cjk_exe or args.auto_cjk_exe or args.legacy_font or
+                                    args.profile != 'stock' or not args.standalone_font):
+                parser.error('--native-exe supports stock with --standalone-font only, without CJK inputs')
             if args.auto_cjk_exe and args.cjk_exe:
                 parser.error('Use --auto-cjk-exe OR --cjk-exe, not both')
-            if args.auto_cjk_exe:
+            if args.native_exe:
+                result = install(args, target)
+            elif args.auto_cjk_exe:
                 if not args.standalone_font:
                     parser.error('Experimental automatic source is allowed only with --standalone-font')
                 if __package__:
