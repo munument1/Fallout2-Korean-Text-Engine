@@ -179,26 +179,42 @@ def install(args, target):
             raise ValueError(f'Runtime asset hash mismatch: {name}; use the verified build.')
         payload[name] = data
     if sfall['enabled']:
+        # Game translations should never modify sfall settings implicitly.
+        # A patched CJK EXE changes the checksum sfall checks, so if the
+        # required value is absent we cannot safely promise sfall will work.
         ini_path = checked_destination(target, 'ddraw.ini')
         text, encoding = decode_ini(ini_path.read_bytes())
-        active, existing = False, []
+        existing = []
+        active = False
         for line in text.splitlines():
             stripped = line.strip()
             if stripped.startswith('['):
                 active = stripped.lower() == '[debugging]'
             elif active and '=' in stripped and stripped.split('=', 1)[0].strip().lower() == 'extracrc':
-                existing = [value.strip() for value in stripped.split('=', 1)[1].split(';', 1)[0].split(',') if value.strip()]
+                existing = [v.strip() for v in stripped.split('=', 1)[1].split(';', 1)[0].split(',') if v.strip()]
                 break
-        if crc.lower() not in [value.lower() for value in existing]:
-            existing.append(crc)
-        text = put_ini(text, 'Debugging', 'ExtraCRC', ','.join(existing))
-        if args.profile != 'stock':
-            # All new translation-only mod packages provide this file separately.
-            text = put_ini(text, 'Main', 'TranslationsINI', r'translations\korean.ini')
-        if 'hires_mode' in profile:
-            # Profiles using an external HRP keep the integrated mode disabled.
-            text = put_ini(text, 'Main', 'HiResMode', str(profile['hires_mode']))
-        payload['ddraw.ini'] = text.encode(encoding)
+        configured = any(v.lower() == crc.lower() for v in existing)
+        needs_hires = ('hires_mode' in profile
+                       and f'hiresmode={profile["hires_mode"]}' not in
+                       ''.join(text.lower().split()))
+        if not getattr(args, 'configure_sfall', False):
+            if not configured or needs_hires:
+                raise ValueError('Existing sfall needs compatibility settings for the modified game EXE. '
+                                 'Korean engine installation will NOT change ddraw.ini. '
+                                 'Choose advanced sfall compatibility settings explicitly, '
+                                 'or use a verified sfall-free game copy.')
+        else:
+            if not configured:
+                existing.append(crc)
+                text = put_ini(text, 'Debugging', 'ExtraCRC', ','.join(existing))
+            if 'hires_mode' in profile:
+                text = put_ini(text, 'Main', 'HiResMode', str(profile['hires_mode']))
+            # TranslationsINI localizes sfall's own UI, not game dialogue.
+            # Apply only if the user asked for sfall integration.
+            if args.profile != 'stock':
+                text = put_ini(text, 'Main', 'TranslationsINI', r'translations\\korean.ini')
+            if text.encode(encoding) != ini_path.read_bytes():
+                payload['ddraw.ini'] = text.encode(encoding)
     cfg_path = checked_destination(target, profile['cfg'])
     text, encoding = decode_ini(cfg_path.read_bytes())
     payload[profile['cfg']] = put_ini(text, 'system', 'language', 'korean').encode(encoding)
@@ -218,6 +234,7 @@ def install(args, target):
             raise ValueError('Unfinished temporary installation file found.')
     report = {'operation': 'install', 'profile': args.profile, 'dry_run': args.dry_run,
               'sfall_unchanged': True, 'sfall_status': sfall['status'],
+              'sfall_ini_modified': 'ddraw.ini' in payload,
               'preserved_mod_bytes': preserved, 'exe_crc': crc,
               'preserved_original_files': {name: value for name, value in required_hashes.items() if name not in payload},
               'patched_dependencies': {name: spec['patched_sha256'] for name, spec in profile.get('file_patches', {}).items()},
@@ -262,6 +279,8 @@ def main():
     parser.add_argument('--legacy-font', type=Path)
     parser.add_argument('--base-exe', type=Path)
     parser.add_argument('--keep-menu-settings', action='store_true')
+    parser.add_argument('--configure-sfall', action='store_true',
+                        help='Explicitly configure existing sfall compatibility INI for patched EXE')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--restore', action='store_true')
     args = parser.parse_args()
