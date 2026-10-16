@@ -9,6 +9,26 @@ Source: [sfall-team/sfall](https://github.com/sfall-team/sfall)
 - The current Korean text engine reconstructs a specific CJK-derived Korean EXE and validates the corresponding CJK signature. Its attached font DLL is not an sfall fork.
 - Official sfall changelogs explicitly mention Chinese/Japanese modified executable compatibility fixes. We should preserve those existing fixes.
 
+## sfall translations do not require `ddraw.ini` modification
+
+Source: [`sfall/Translate.cpp`](https://github.com/sfall-team/sfall/blob/master/sfall/Translate.cpp).
+
+Official sfall's `MakeLangTranslationPath` reads the game's `[system] language` setting and its `master_patches` root, then looks for the translation INI at:
+
+```text
+<master_patches>/text/<language>/<TranslationsINI filename>
+```
+
+With the default `TranslationsINI=.\\Translations.ini`, `language=korean`, and `master_patches=data`, this becomes:
+
+```text
+data/text/korean/Translations.ini
+```
+
+**Practical consequence:** ship a Korean sfall-message translation at `data/text/korean/Translations.ini` in the separate language pack. Neither `TranslationsINI` nor other sections of `ddraw.ini` need changing to enable sfall's own translated strings on this default path. Existing mods with a non-default `TranslationsINI` or `master_patches` may require their own path layouts; preserve their settings.
+
+The only sfall configuration obstacle for the *fixed modified Korean EXE* is its checksum acceptance. That is what the upstream CRC whitelist request solves. This does not replace the game's normal `fallout2.cfg` `language=korean` selection, Korean font DLL, or separate translated `.msg` files.
+
 ## Smallest upstream change
 
 The canonical Korean-patched US 1.02d EXE has sfall CRC32C **`0xFCDC75E0`** in `runtime-manifest.json`, and verified SHA-256 **`151e99194ac403bd8cc188a2f10b5ef994ffe496fb925b1a4c1b7f8fa73f634e`**.
@@ -59,7 +79,7 @@ For the exact Korean US 1.02d executable:
 
 Would you be willing to include this exact CRC in the upstream accepted executable list, assuming we provide gameplay test results with an unchanged official sfall DLL? A minimal one-line patch is ready. We will provide reproducible hash/CRC evidence rather than distribute the retail or third-party executable.
 
-We also have mod-specific builds with other CRCs, but we suggest discussing those separately after compatibility testing rather than adding all of them without review.
+We also have mod-specific builds with other CRCs, but we suggest discussing those separately after compatibility testing rather than adding all of them without review.\n\nAs an additional packaging improvement, the existing Translate.cpp already automatically resolves `data/text/korean/Translations.ini` for `language=korean` when its filename is left at the default. We will use that language-pack layout instead of changing `TranslationsINI`.
 
 Thank you for supporting Chinese/Japanese modified EXEs already; we'd like Korean support to follow the same approach.
 
