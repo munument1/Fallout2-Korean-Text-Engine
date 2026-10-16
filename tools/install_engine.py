@@ -11,7 +11,7 @@ if __package__:
 else:
     from runtime import korean_exe, sfall_crc, sha, put_ini, decode_ini
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
 STEAM = Path(r'C:\Games\Steam\steamapps\common\Fallout 2').resolve()
 BACKUP = 'korean_engine_backup_v2'
 
