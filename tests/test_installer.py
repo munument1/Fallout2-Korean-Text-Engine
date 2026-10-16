@@ -128,7 +128,7 @@ class InstallerTests(unittest.TestCase):
             self.seed(target, 'stock')
             required_crc = self.manifest['profiles']['stock']['sfall_crc']
             ini = target / 'ddraw.ini'
-            ini.write_bytes(ini.read_bytes() + ('ExtraCRC=' + required_crc + '\\r\\n').encode())
+            ini.write_bytes(ini.read_bytes() + ('ExtraCRC=' + required_crc + chr(13) + chr(10)).encode())
             # Make the added assignment the only active ExtraCRC.
             before = ini.read_bytes().replace(b'ExtraCRC=0x12345678 ; existing mod compatibility', b'; kept for history')
             ini.write_bytes(before)
