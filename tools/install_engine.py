@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 import pefile
 if __package__:
@@ -224,9 +225,24 @@ def install(args, target):
     sfall_path = checked_destination(target, 'ddraw.dll')
     sfall_hash = sfall['hash']
     donor = args.cjk_exe.read_bytes()
-    legacy = args.legacy_font.read_bytes()
-    if sha(legacy) != manifest['legacy_font_sha256']:
-        raise ValueError('Unsupported user-supplied legacy font DLL.')
+    standalone_path = getattr(args, 'standalone_font', None)
+    if standalone_path:
+        standalone_data = Path(standalone_path).read_bytes()
+        # The experimental adapter is independently compiled. Its interface
+        # must match all CJK font exports without linking to the legacy DLL.
+        binary = pefile.PE(data=standalone_data)
+        if binary.FILE_HEADER.Machine != 0x14c or not (binary.FILE_HEADER.Characteristics & 0x2000):
+            raise ValueError('Experimental standalone font must be an x86 DLL.')
+        symbols = {entry.name.decode('ascii') for entry in binary.DIRECTORY_ENTRY_EXPORT.symbols if entry.name}
+        required = {'InitFont', 'ClearFont', 'SelectFont', 'GetTextWidth', 'GetTextHeight',
+                    'TextOutput', 'TextOutputL', 'TextOutputX', 'SplitText'}
+        if not required <= symbols or b'fallout2font_legacy.dll' in standalone_data:
+            raise ValueError('Standalone font ABI validation failed.')
+        legacy = None
+    else:
+        legacy = args.legacy_font.read_bytes()
+        if sha(legacy) != manifest['legacy_font_sha256']:
+            raise ValueError('Unsupported user-supplied legacy font DLL.')
     stock = original if sha(original) == manifest['stock_sha256'] else args.base_exe.read_bytes() if args.base_exe else None
     if stock is None:
         raise ValueError('--base-exe pointing to stock US 1.02d is required for a custom mod EXE.')
@@ -240,7 +256,9 @@ def install(args, target):
         crc = f'0x{sfall_crc(patched, manifest["crc_table"]):08X}'
         if crc != profile['sfall_crc']:
             raise ValueError('Derived EXE CRC mismatch.')
-    payload = {profile['exe']: patched, 'fallout2font_legacy.dll': legacy}
+    payload = {profile['exe']: patched}
+    if legacy is not None:
+        payload['fallout2font_legacy.dll'] = legacy
     # External HRP generates its own monitor bullet, bypassing the EXE constants.
     # Patch only a hash-verified profile dependency, with exact instruction checks.
     for name, spec in profile.get('file_patches', {}).items():
@@ -261,6 +279,8 @@ def install(args, target):
         if sha(data) != expected:
             raise ValueError(f'Runtime asset hash mismatch: {name}; use the verified build.')
         payload[name] = data
+    if standalone_path:
+        payload['fallout2font.dll'] = standalone_data
     sfall_crc_added = False
     if sfall['enabled']:
         # The GUI confirms which settings will change before writing.
@@ -299,6 +319,7 @@ def install(args, target):
         if path.with_name(path.name + '.korean-tmp').exists():
             raise ValueError('Unfinished temporary installation file found.')
     report = {'operation': 'install', 'profile': args.profile, 'dry_run': args.dry_run,
+              'renderer': 'experimental-standalone' if standalone_path else 'legacy-cjk-bridge',
               'sfall_unchanged': True, 'sfall_status': sfall['status'],
               'sfall_ini_modified': 'ddraw.ini' in payload,
               'sfall_crc_added': sfall_crc_added,
@@ -344,6 +365,10 @@ def main():
     parser.add_argument('--profile', choices=['stock', 'rpu', 'ettu', 'sonora', 'sonora-dev', 'nevada', 'olympus', 'resurrection'])
     parser.add_argument('--cjk-exe', type=Path)
     parser.add_argument('--legacy-font', type=Path)
+    parser.add_argument('--standalone-font', type=Path,
+                        help='Experiment only: independently compiled font DLL; no Chinese legacy font DLL')
+    parser.add_argument('--auto-cjk-exe', action='store_true',
+                        help='Explicit opt-in: temporarily download a hash-pinned upstream CJK EXE')
     parser.add_argument('--base-exe', type=Path)
     parser.add_argument('--keep-menu-settings', action='store_true')
     parser.add_argument('--configure-sfall', action='store_true',
@@ -356,9 +381,28 @@ def main():
         if args.restore:
             result = restore(target, args.dry_run)
         else:
-            if not all([args.profile, args.cjk_exe, args.legacy_font]):
-                parser.error('--profile, --cjk-exe and --legacy-font are required for installation')
-            result = install(args, target)
+            if not args.profile or (not args.legacy_font and not args.standalone_font):
+                parser.error('--profile and exactly one font DLL mode are required')
+            if args.legacy_font and args.standalone_font:
+                parser.error('Choose --legacy-font OR --standalone-font, not both')
+            if args.auto_cjk_exe and args.cjk_exe:
+                parser.error('Use --auto-cjk-exe OR --cjk-exe, not both')
+            if args.auto_cjk_exe:
+                if not args.standalone_font:
+                    parser.error('Experimental automatic source is allowed only with --standalone-font')
+                if __package__:
+                    from .cjk_provider import download_verified_exe
+                else:
+                    from cjk_provider import download_verified_exe
+                with tempfile.TemporaryDirectory(prefix='fallout2-korean-source-') as directory:
+                    manifest = json.loads((ROOT / 'runtime-manifest.json').read_text(encoding='utf-8'))
+                    args.cjk_exe = download_verified_exe(
+                        Path(directory) / 'Fallout2.exe', manifest['cjk_exe_sha256'])
+                    result = install(args, target)
+            else:
+                if not args.cjk_exe:
+                    parser.error('Select a CJK executable or opt in to verified automatic download')
+                result = install(args, target)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (OSError, ValueError, UnicodeError, pefile.PEFormatError) as error:
