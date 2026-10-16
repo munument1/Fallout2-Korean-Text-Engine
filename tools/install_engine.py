@@ -99,6 +99,73 @@ def read_ini_option(text, section, key):
     return None
 
 
+
+def ensure_sfall_crc(text, crc):
+    """Register a single CJK-compatible EXE CRC without rewriting other INI data.
+
+    Preserve whitespace, line endings, existing entries, comments and BOM.
+    Refuse ambiguous duplicate [Debugging] / ExtraCRC entries.
+    """
+    import re
+
+    if not re.fullmatch(r'0[xX][0-9a-fA-F]{8}', crc):
+        raise ValueError('Invalid Korean executable CRC.')
+    lines = text.splitlines(keepends=True)
+    newline = '\r\n' if '\r\n' in text else ('\n' if '\n' in text else '\r' if '\r' in text else '\r\n')
+    active = False
+    section_count = 0
+    section_end = None
+    crc_lines = []
+    for index, line in enumerate(lines):
+        body = line.rstrip('\r\n')
+        clean = body.lstrip(' \t\ufeff')
+        if not clean or clean.startswith((';', '#')):
+            continue
+        header = re.match(r'^\[([^\]]+)\]\s*(?:[;#].*)?$', clean)
+        if header:
+            if active and section_end is None:
+                section_end = index
+            active = header.group(1).strip().casefold() == 'debugging'
+            if active:
+                section_count += 1
+            continue
+        if active and re.match(r'^ExtraCRC\s*=', clean, re.I):
+            crc_lines.append(index)
+    if section_count > 1 or len(crc_lines) > 1:
+        raise ValueError('Ambiguous duplicate sfall Debugging/ExtraCRC entries; refusing to edit.')
+    if crc_lines:
+        index = crc_lines[0]
+        line = lines[index]
+        body = line.rstrip('\r\n')
+        eol = line[len(body):]
+        match = re.match(r'^(\s*ExtraCRC\s*=\s*)([^;#]*)([;#].*)?$', body, re.I)
+        if not match:
+            raise ValueError('Malformed sfall ExtraCRC entry.')
+        current = match.group(2)
+        tokens = [item.strip() for item in current.split(',') if item.strip()]
+        if any(not re.fullmatch(r'0[xX][0-9a-fA-F]{1,8}', item) for item in tokens):
+            raise ValueError('Unrecognized existing sfall ExtraCRC entry; refusing to edit.')
+        if any(int(item, 16) == int(crc, 16) for item in tokens):
+            return text
+        value = current.rstrip()
+        trailing = current[len(value):]
+        if not value and match.group(3) and not trailing:
+            # Keep an inline comment separated when the original value was empty.
+            trailing = ' '
+        updated = (value + ',' if value else '') + crc + trailing
+        lines[index] = body[:match.start(2)] + updated + body[match.end(2):] + eol
+        return ''.join(lines)
+    if section_count:
+        insert_at = section_end if section_end is not None else len(lines)
+        if insert_at > 0 and not lines[insert_at - 1].endswith(('\r', '\n')):
+            lines[insert_at - 1] += newline
+        lines.insert(insert_at, 'ExtraCRC=' + crc + newline)
+        return ''.join(lines)
+    if text and not text.endswith(('\n', '\r')):
+        text += newline
+    return text + '[Debugging]' + newline + 'ExtraCRC=' + crc + newline
+
+
 def inspect_sfall(target, manifest):
     """Detect an existing sfall installation, without requiring or replacing it.
 
@@ -194,35 +261,26 @@ def install(args, target):
         if sha(data) != expected:
             raise ValueError(f'Runtime asset hash mismatch: {name}; use the verified build.')
         payload[name] = data
+    sfall_crc_added = False
     if sfall['enabled']:
-        # Game translations should never modify sfall settings implicitly.
-        # A patched CJK EXE changes the checksum sfall checks, so if the
-        # required value is absent we cannot safely promise sfall will work.
+        # The GUI confirms which settings will change before writing.
+        # CJK-modified executables are expected to use ExtraCRC in official sfall.
         ini_path = checked_destination(target, 'ddraw.ini')
-        text, encoding = decode_ini(ini_path.read_bytes())
-        values = read_ini_option(text, 'Debugging', 'ExtraCRC') or ''
-        existing = [v.strip() for v in values.split(',') if v.strip()]
-        configured = any(v.lower() == crc.lower() for v in existing)
+        original_ini = ini_path.read_bytes()
+        text, encoding = decode_ini(original_ini)
+        updated = ensure_sfall_crc(text, crc)
+        sfall_crc_added = updated != text
         needs_hires = ('hires_mode' in profile and
                        read_ini_option(text, 'Main', 'HiResMode') != str(profile['hires_mode']))
-        if not getattr(args, 'configure_sfall', False):
-            if not configured or needs_hires:
-                raise ValueError('Existing sfall needs compatibility settings for the modified game EXE. '
-                                 'Korean engine installation will NOT change ddraw.ini. '
-                                 'Choose advanced sfall compatibility settings explicitly, '
-                                 'or use a verified sfall-free game copy.')
-        else:
-            if not configured:
-                existing.append(crc)
-                text = put_ini(text, 'Debugging', 'ExtraCRC', ','.join(existing))
-            if 'hires_mode' in profile:
-                text = put_ini(text, 'Main', 'HiResMode', str(profile['hires_mode']))
-            # TranslationsINI localizes sfall's own UI, not game dialogue.
-            # Apply only if the user asked for sfall integration.
-            if args.profile != 'stock':
-                text = put_ini(text, 'Main', 'TranslationsINI', r'translations\\korean.ini')
-            if text.encode(encoding) != ini_path.read_bytes():
-                payload['ddraw.ini'] = text.encode(encoding)
+        if needs_hires and not getattr(args, 'configure_sfall', False):
+            raise ValueError('This profile needs an additional HiResMode compatibility change. '
+                             'The automatic setting only adds ExtraCRC. '
+                             'Choose advanced sfall compatibility settings explicitly.')
+        if needs_hires:
+            updated = put_ini(updated, 'Main', 'HiResMode', str(profile['hires_mode']))
+        # Never override a mod-provided TranslationsINI.
+        if updated.encode(encoding) != original_ini:
+            payload['ddraw.ini'] = updated.encode(encoding)
     cfg_path = checked_destination(target, profile['cfg'])
     text, encoding = decode_ini(cfg_path.read_bytes())
     payload[profile['cfg']] = put_ini(text, 'system', 'language', 'korean').encode(encoding)
@@ -243,6 +301,7 @@ def install(args, target):
     report = {'operation': 'install', 'profile': args.profile, 'dry_run': args.dry_run,
               'sfall_unchanged': True, 'sfall_status': sfall['status'],
               'sfall_ini_modified': 'ddraw.ini' in payload,
+              'sfall_crc_added': sfall_crc_added,
               'preserved_mod_bytes': preserved, 'exe_crc': crc,
               'preserved_original_files': {name: value for name, value in required_hashes.items() if name not in payload},
               'patched_dependencies': {name: spec['patched_sha256'] for name, spec in profile.get('file_patches', {}).items()},
