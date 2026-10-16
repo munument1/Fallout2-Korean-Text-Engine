@@ -83,6 +83,22 @@ def restore(target, dry_run):
     return {'operation': 'restore', 'dry_run': dry_run}
 
 
+def read_ini_option(text, section, key):
+    """Read only active INI assignments (ignoring commented-out defaults)."""
+    active = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith((';', '#')):
+            continue
+        if stripped.startswith('['):
+            active = stripped.casefold() == f'[{section}]'.casefold()
+        elif active and '=' in stripped:
+            name, value = stripped.split('=', 1)
+            if name.strip().casefold() == key.casefold():
+                return value.split(';', 1)[0].strip()
+    return None
+
+
 def inspect_sfall(target, manifest):
     """Detect an existing sfall installation, without requiring or replacing it.
 
@@ -184,19 +200,11 @@ def install(args, target):
         # required value is absent we cannot safely promise sfall will work.
         ini_path = checked_destination(target, 'ddraw.ini')
         text, encoding = decode_ini(ini_path.read_bytes())
-        existing = []
-        active = False
-        for line in text.splitlines():
-            stripped = line.strip()
-            if stripped.startswith('['):
-                active = stripped.lower() == '[debugging]'
-            elif active and '=' in stripped and stripped.split('=', 1)[0].strip().lower() == 'extracrc':
-                existing = [v.strip() for v in stripped.split('=', 1)[1].split(';', 1)[0].split(',') if v.strip()]
-                break
+        values = read_ini_option(text, 'Debugging', 'ExtraCRC') or ''
+        existing = [v.strip() for v in values.split(',') if v.strip()]
         configured = any(v.lower() == crc.lower() for v in existing)
-        needs_hires = ('hires_mode' in profile
-                       and f'hiresmode={profile["hires_mode"]}' not in
-                       ''.join(text.lower().split()))
+        needs_hires = ('hires_mode' in profile and
+                       read_ini_option(text, 'Main', 'HiResMode') != str(profile['hires_mode']))
         if not getattr(args, 'configure_sfall', False):
             if not configured or needs_hires:
                 raise ValueError('Existing sfall needs compatibility settings for the modified game EXE. '
