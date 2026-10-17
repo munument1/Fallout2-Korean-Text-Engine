@@ -126,26 +126,37 @@ class GuiInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "OtherUpdatedGame.exe"):
                 detect_native_executables(folder)
 
+    def test_legacy_resurrection_rejected_before_exe_write(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            original = b'fake executable contents'
+            (folder / 'FALLOUT2').write_bytes(original)
+            (folder / 'fores.exe').write_bytes(b'legacy launcher')
+            (folder / 'fores.cfg').write_bytes(b'[system]\nlanguage=korean\n')
+            with self.assertRaisesRegex(ValueError, 'Resurrection.*KR1.1'):
+                detect_native_executables(folder)
+            self.assertEqual((folder / 'FALLOUT2').read_bytes(), original)
+            self.assertFalse((folder / 'korean_engine_backup_v2').exists())
+
     @unittest.skipUnless(__import__('os').environ.get('KOREAN_ENGINE_STOCK_EXE'),
                          'Original PE fixture unavailable')
-    def test_extensionless_watcom_game_and_external_launcher(self):
+    def test_extensionless_generic_engine_still_supported(self):
         from os import environ
         original = Path(environ['KOREAN_ENGINE_STOCK_EXE']).read_bytes()
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
             (folder / 'FALLOUT2').write_bytes(original)
-            (folder / 'fores.exe').write_bytes(b'unrelated launcher')
-            (folder / 'fores.cfg').write_text('[system]\nlanguage=english\n')
+            (folder / 'custom.cfg').write_text('[system]\nlanguage=english\n')
             self.assertEqual(set(detect_native_executables(folder)), {'FALLOUT2'})
-            self.assertEqual(detect_native_config(folder, ['FALLOUT2']), 'fores.cfg')
+            self.assertEqual(detect_native_config(folder, ['FALLOUT2']), 'custom.cfg')
 
     @unittest.skipUnless(__import__('os').environ.get('KOREAN_ENGINE_RESURRECTION_DIR'),
                          'Original Resurrection total conversion unavailable')
-    def test_real_resurrection_launcher_not_mistaken_for_game(self):
+    def test_real_resurrection_redirected_to_legacy_patch(self):
         from os import environ
         game = Path(environ['KOREAN_ENGINE_RESURRECTION_DIR'])
-        self.assertEqual(set(detect_native_executables(game)), {'FALLOUT2'})
-        self.assertEqual(detect_native_config(game, ['FALLOUT2']), 'fores.cfg')
+        with self.assertRaisesRegex(ValueError, 'Resurrection.*KR1.1'):
+            detect_native_executables(game)
 
     @unittest.skipUnless(__import__("os").environ.get("KOREAN_ENGINE_RPU_EXE"),
                          "Owner RPU EXE unavailable")
