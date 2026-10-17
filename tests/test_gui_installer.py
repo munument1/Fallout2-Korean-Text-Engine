@@ -5,7 +5,8 @@ from pathlib import Path
 
 from tools.gui_installer import (detect_profiles, detect_native_profile, find_cjk_files,
                                  guess_profile, self_test, suggest_stock_exe)
-from tools.install_engine import inspect_sfall, validate_target
+from tools.install_engine import (inspect_sfall, validate_target,
+                                  detect_native_executables, detect_native_config)
 from tools.native_pe import STOCK_SHA256, RPU_HRP_SHA256
 from tools.runtime import sha
 
@@ -102,6 +103,44 @@ class GuiInstallerTests(unittest.TestCase):
         stock = Path(environ["KOREAN_ENGINE_STOCK_EXE"])
         self.assertEqual(sha(stock.read_bytes()), STOCK_SHA256)
         self.assertEqual(detect_native_profile(stock.parent), "stock")
+
+    @unittest.skipUnless(__import__("os").environ.get("KOREAN_ENGINE_STOCK_EXE"),
+                         "Owner original EXE unavailable")
+    def test_future_mod_name_and_new_sha_still_detect_without_registration(self):
+        from os import environ
+        original = Path(environ["KOREAN_ENGINE_STOCK_EXE"]).read_bytes()
+        updated = bytearray(original)
+        updated[0x51994] ^= 1  # unmodified Watcom ABI, different EXE hash
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            (folder / "MyFutureMod_2.7.exe").write_bytes(updated)
+            (folder / "MyFutureMod_2.7.cfg").write_text(
+                "[system]\nlanguage=english\n", encoding="ascii")
+            self.assertEqual(list(detect_native_executables(folder)), ["MyFutureMod_2.7.exe"])
+            self.assertEqual(detect_native_config(folder, ["MyFutureMod_2.7.exe"]),
+                             "MyFutureMod_2.7.cfg")
+            # A changed core font-related function fails the *whole* folder.
+            other = bytearray(original)
+            other[0x32570] ^= 1
+            (folder / "OtherUpdatedGame.exe").write_bytes(other)
+            with self.assertRaisesRegex(ValueError, "OtherUpdatedGame.exe"):
+                detect_native_executables(folder)
+
+    @unittest.skipUnless(__import__("os").environ.get("KOREAN_ENGINE_RPU_EXE"),
+                         "Owner RPU EXE unavailable")
+    def test_native_detects_all_valid_rpu_executables_without_profile(self):
+        from os import environ
+        game = Path(environ["KOREAN_ENGINE_RPU_EXE"]).parent
+        self.assertEqual(set(detect_native_executables(game)), {"fallout2.exe", "fallout2HR.exe"})
+        self.assertEqual(detect_native_config(game, detect_native_executables(game)), "fallout2.cfg")
+
+    @unittest.skipUnless(__import__("os").environ.get("KOREAN_ENGINE_NEVADA_EXE"),
+                         "Owner Nevada EXE unavailable")
+    def test_native_detects_mod_exe_and_config_without_registry(self):
+        from os import environ
+        game = Path(environ["KOREAN_ENGINE_NEVADA_EXE"]).parent
+        self.assertEqual(set(detect_native_executables(game)), {"Nevada.exe", "NevadaHD.exe"})
+        self.assertEqual(detect_native_config(game, detect_native_executables(game)), "Nevada.cfg")
 
     def test_missing_profile_dependency_is_not_detected(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -311,16 +311,13 @@ class Installer(tk.Tk):
         try:
             path = engine.validate_target(path)
             if self.native_mode:
-                profile = detect_native_profile(path)
-                if profile:
-                    self.profile_title.set(PROFILE_TITLES[profile])
-                    digest = sha((path / "fallout2.exe").read_bytes())
-                    extra = " (기존 고해상도 패치 보존)" if digest == RPU_HRP_SHA256 else ""
-                    self.summary.set("자동 판별: " + PROFILE_TITLES[profile] + extra)
-                elif (path / engine.BACKUP / "manifest.json").is_file():
+                if (path / engine.BACKUP / "manifest.json").is_file():
                     self.summary.set("이미 설치된 폴더입니다. 기존 설치기를 이용해 복구하세요.")
                 else:
-                    self.summary.set("아직 검증되지 않은 EXE입니다. 지원 대상: 순정 US 1.02d 또는 검증된 RPU 고해상도 패치 EXE.")
+                    executables = engine.detect_native_executables(path)
+                    config = engine.detect_native_config(path, executables.keys())
+                    self.summary.set("자동 호환성 검사 통과: " + ", ".join(executables) +
+                                     " / 설정: " + config)
                 return
             matches = detect_profiles(path, self.manifest)
             self.combo.configure(values=[PROFILE_TITLES[key] for key in matches])
@@ -357,9 +354,9 @@ class Installer(tk.Tk):
             raise ValueError("게임 폴더를 선택하세요.")
         target = engine.validate_target(Path(self.target.get()))
         if self.native_mode:
-            profile = detect_native_profile(target)
-            if not profile:
-                raise ValueError("지원되지 않는 실행 파일입니다. 순정 US 1.02d 또는 검증된 RPU 고해상도 패치 버전만 자동 설치할 수 있습니다.")
+            executables = engine.detect_native_executables(target)
+            engine.detect_native_config(target, executables.keys())
+            profile = None
         else:
             profile = PROFILE_BY_TITLE.get(self.profile_title.get())
             if not profile or profile not in detect_profiles(target, self.manifest):
@@ -391,9 +388,10 @@ class Installer(tk.Tk):
         # ExtraCRC is managed automatically; advanced settings cover mod-specific HRP fixes.
         engine.inspect_sfall(target, self.manifest)
 
-        profile_spec = self.manifest["profiles"][profile]
-        game_exe = target / profile_spec["exe"]
         stock = None
+        if not self.native_mode:
+            profile_spec = self.manifest["profiles"][profile]
+            game_exe = target / profile_spec["exe"]
         if not self.native_mode and sha(game_exe.read_bytes()) != self.manifest["stock_sha256"]:
             stock = Path(self.base.get()) if self.base.get() else suggest_stock_exe(target, self.manifest)
             if stock is None:
@@ -409,8 +407,7 @@ class Installer(tk.Tk):
             profile=profile, cjk_exe=cjk_exe, legacy_font=legacy,
             standalone_font=standalone,
             native_exe=self.native_mode,
-            base_exe=stock, keep_menu_settings=(self.keep_menu.get() or
-                                               (self.native_mode and profile == "rpu")),
+            base_exe=stock, keep_menu_settings=(self.keep_menu.get() or self.native_mode),
             configure_sfall=self.configure_sfall.get(), dry_run=dry_run)
 
     def _install(self):
