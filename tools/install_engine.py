@@ -44,10 +44,10 @@ def detect_native_executables(target):
     the other launcher and leave a partly translated installation.
     """
     if is_legacy_resurrection(target):
-        raise ValueError('Fallout 1.5 Resurrection: keep the existing Korean KR1.1 '
-                         'patch and original sfall/HRP configuration. This native '
-                         'installer intentionally excludes Resurrection. See: '
-                         + RESURRECTION_LEGACY_PATCH)
+        raise ValueError('Fallout 1.5 Resurrection: 기존 한국어 패치 KR1.1을 사용하세요. '
+                         '구형 sfall 및 고해상도 설정의 호환성 문제로 새 독립형 '
+                         '설치기에서 제외했습니다. 기존 게임 파일은 변경하지 않습니다. '
+                         '다운로드: ' + RESURRECTION_LEGACY_PATCH)
     try:
         from .native_pe import inspect_native_exe
     except ImportError:
