@@ -20,9 +20,10 @@ BACKUP = 'korean_engine_backup_v2'
 
 
 def detect_native_executables(target):
-    """Find all compatible 1.02d-derived EXEs, without game/profile labels.
+    """Find compatible Watcom PE game images, even when they have no extension.
 
-    Only candidates with the classic Watcom BEGTEXT section enter the native
+    Only .exe and extensionless PE candidates with the classic Watcom BEGTEXT
+    section enter the native
     validator. A changed engine ABI is an error, not permission to patch just
     the other launcher and leave a partly translated installation.
     """
@@ -32,7 +33,7 @@ def detect_native_executables(target):
         from native_pe import inspect_native_exe
     candidates = {}
     for path in sorted(Path(target).iterdir(), key=lambda item: item.name.casefold()):
-        if path.suffix.casefold() != '.exe' or not path.is_file():
+        if path.suffix.casefold() not in ('.exe', '') or not path.is_file():
             continue
         if path.is_symlink():
             raise ValueError('Symlinked executable is unsupported: ' + path.name)
@@ -97,6 +98,11 @@ def detect_native_config(target, executable_names):
         raise ValueError('Multiple game configurations found without one verified sfall ConfigFile.')
     if choices:
         return choices[0]
+    # Some Fallout 2 total conversions use an extensionless game PE and an
+    # independent launcher. The game CFG then has the launcher's stem, not
+    # the PE's name. One existing CFG is unambiguous without a game profile.
+    if len(configs) == 1:
+        return next(iter(configs.values()))
     if 'fallout2.cfg' in configs:
         return configs['fallout2.cfg']
     raise ValueError('Unable to locate the game text configuration for compatible EXE(s).')

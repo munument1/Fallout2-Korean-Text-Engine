@@ -10,7 +10,7 @@
 
 ## 적용 원리
 
-1. 게임 폴더의 .exe 파일 중 Watcom 기반 Fallout 2 실행 파일을 탐색한다.
+1. 게임 폴더의 .exe 또는 확장자 없는 PE 파일 중 Watcom 기반 Fallout 2 실행 파일을 탐색한다. Resurrection은 `fores.exe` 런처를 보존하고 실제 엔진 파일 `FALLOUT2`만 검사한다.
 2. Win32 PE 핵심 섹션 매핑, 원래 후킹 명령어, Windows DLL import,
    폰트 콜백 관리자, 줄바꿈 및 호출 ABI의 여섯 부분 SHA-256 지문을 검사한다.
 3. 이 지문이 호환되면 **EXE 전체 SHA-256이 바뀌어도** 설치 가능하다.
@@ -35,7 +35,7 @@ Fallout 2의 폰트 ABI와 메모리 매핑을 유지하는 업데이트에 대�
 | Et Tu | 두 EXE 성공 | 원본에서도 HRP와 sfall 고해상도 설정 충돌 발생 |
 | Sonora | 한 EXE 성공 | 번역 미설치 시 기존 언어 설정 유지, 게임 창 확인 |
 | Nevada | 두 EXE 성공 | 기존 4.3.0.2 Extended sfall 보존, 도입 화면 진입 |
-| Resurrection | 두 EXE 성공 (sfall 4.5.1 별도 적용) | 구형 3.2a로는 EXE 크기 검사 실패, 4.5.1에서 도입 화면 진입 |
+| Resurrection 1.5 실제 설치본 | 확장자 없는 `FALLOUT2` 한 개 호환 | `fores.exe` 보존; 구형 sfall 3.7.4에서 EXE 크기 거부, 4.5.1 + `HiResMode=0`에서 게임 창 진입 |
 | Olympus 2207 | 세 EXE 성공 | 4.2.6 Extended sfall 유지, `olympus.cfg` 자동 선택, 특수 ExtraCRC 보존·도입 화면 진입 |
 
 2026-10-17 추가 실증: 사용자가 업데이트 완료를 확인하고 직접 수정을 허용한
@@ -51,6 +51,22 @@ SHA-256 동일성을 확인했다.
 이 기동 시험은 **한국어 전체 대화·전투·저장·로드·모드 전용 스크립트의
 장시간 검증이 아니다**. Nevada와 Sonora는 기존 한국어 MSG 텍스트가 없어
 별도 번역 파일을 마련하기 전에는 영어 언어 설정을 유지한다.
+
+추가 수정: 위의 `D:\Fallout 2\Resurrection` 상위 폴더는 실제 Resurrection
+게임 폴더가 아니라 원본 Fallout 2 자료가 있는 폴더였음을 후속 조사로 확인했다.
+해당 상위 폴더에 적용한 한국어 엔진 및 교체 sfall은 SHA-256을 대조해 원상복구했다.
+**실제 Resurrection 1.5 게임은 `D:\Fallout 2\Resurrection\Resurrection`에 있다.**
+별도 `fores.exe` 런처, 원본 확장자 없는 `FALLOUT2` 1.02d PE,
+`fores.cfg`, 모드 전용 `fores.dat`가 존재한다.
+beta.2는 .exe 확장자 여부가 아니라 Watcom PE 구조를 기준으로 엔진 파일을
+검사하므로 `FALLOUT2`만 패치하고 `fores.exe`는 보존한다.
+검증한 복사본에서 번역 629개와 엔진 설치 후 기존 sfall 3.7.4는
+`Expected 0x122800 but got 0x123800` 오류를 표시했다.
+공식 sfall 4.5.1로만 바꾸면 중복 고해상도 패치 충돌 경고가 발생했으나,
+`ddraw.ini`의 `[Main] HiResMode=0`까지 설정하자 16초 이상 게임 창이 유지됐다.
+실제 게임 폴더에도 동일한 구성으로 적용하고 번역/엔진 해시를 확인했다.
+전체화면 캡처는 검은 화면이므로 **한국어 메뉴까지 확인됐다고 주장하지 않는다.**
+별도 복구용 기존 sfall DLL·INI는 작업 폴더에 보관했다.
 
 ## 후속 주의
 

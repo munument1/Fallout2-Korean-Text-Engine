@@ -126,6 +126,27 @@ class GuiInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "OtherUpdatedGame.exe"):
                 detect_native_executables(folder)
 
+    @unittest.skipUnless(__import__('os').environ.get('KOREAN_ENGINE_STOCK_EXE'),
+                         'Original PE fixture unavailable')
+    def test_extensionless_watcom_game_and_external_launcher(self):
+        from os import environ
+        original = Path(environ['KOREAN_ENGINE_STOCK_EXE']).read_bytes()
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            (folder / 'FALLOUT2').write_bytes(original)
+            (folder / 'fores.exe').write_bytes(b'unrelated launcher')
+            (folder / 'fores.cfg').write_text('[system]\nlanguage=english\n')
+            self.assertEqual(set(detect_native_executables(folder)), {'FALLOUT2'})
+            self.assertEqual(detect_native_config(folder, ['FALLOUT2']), 'fores.cfg')
+
+    @unittest.skipUnless(__import__('os').environ.get('KOREAN_ENGINE_RESURRECTION_DIR'),
+                         'Original Resurrection total conversion unavailable')
+    def test_real_resurrection_launcher_not_mistaken_for_game(self):
+        from os import environ
+        game = Path(environ['KOREAN_ENGINE_RESURRECTION_DIR'])
+        self.assertEqual(set(detect_native_executables(game)), {'FALLOUT2'})
+        self.assertEqual(detect_native_config(game, ['FALLOUT2']), 'fores.cfg')
+
     @unittest.skipUnless(__import__("os").environ.get("KOREAN_ENGINE_RPU_EXE"),
                          "Owner RPU EXE unavailable")
     def test_native_detects_all_valid_rpu_executables_without_profile(self):
@@ -220,11 +241,11 @@ class GuiInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "ddraw.ini"):
                 inspect_sfall(target, {"official_sfall_sha256": "unused"})
 
-    @unittest.skipUnless(__import__('os').environ.get('KOREAN_ENGINE_RESURRECTION_DIR'),
+    @unittest.skipUnless(__import__('os').environ.get('KOREAN_ENGINE_RESURRECTION_LEGACY_DIR'),
                          'Owner Resurrection sfall 3.2a files unavailable')
     def test_resurrection_legacy_sfall_rejected_before_size_check_failure(self):
         from os import environ
-        target = Path(environ['KOREAN_ENGINE_RESURRECTION_DIR'])
+        target = Path(environ['KOREAN_ENGINE_RESURRECTION_LEGACY_DIR'])
         with self.assertRaisesRegex(ValueError, 'unverified ddraw.dll'):
             inspect_sfall(target, {'official_sfall_sha256': 'unused'})
 
