@@ -1,0 +1,83 @@
+name: Build and publish Windows installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/**"
+      - "tests/**"
+      - "fonts/**"
+      - "runtime-manifest.json"
+      - "fallout2font.dll"
+      - "fallout2font.ini"
+      - "requirements.txt"
+      - "README.md"
+      - "docs/RELEASE_NOTES.md"
+      - ".github/workflows/windows-release.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build requirements
+        run: python -m pip install -r requirements.txt pyinstaller==6.16.0
+      - name: Test installer and runtime
+        run: python -m unittest discover -s tests -v
+      - name: Build developer ZIP
+        run: python tools/package_engine.py --output dist/korean-text-engine.zip
+      - name: Build standalone GUI installer
+        shell: pwsh
+        run: >-
+          pyinstaller --noconfirm --clean --onefile --windowed
+          --name Fallout2-Korean-Text-Engine-Setup
+          --paths .
+          --add-data "runtime-manifest.json;."
+          --add-data "fallout2font.dll;."
+          --add-data "fallout2font.ini;."
+          --add-data "fonts;fonts"
+          tools/gui_installer.py
+      - name: Smoke-test packaged executable and manifest
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath "./dist/Fallout2-Korean-Text-Engine-Setup.exe" -ArgumentList "--self-test" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Packaged installer failed its bundled-asset self-test." }
+      - name: Write SHA256 checksums
+        shell: pwsh
+        run: |
+          $files = @("dist/Fallout2-Korean-Text-Engine-Setup.exe", "dist/korean-text-engine.zip")
+          $checksums = foreach ($file in $files) {
+            $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $(Split-Path $file -Leaf)"
+          }
+          $checksums | Set-Content -Path "dist/SHA256SUMS.txt" -Encoding ascii
+      - name: Upload tested build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fallout2-korean-text-engine-windows
+          path: |
+            dist/Fallout2-Korean-Text-Engine-Setup.exe
+            dist/korean-text-engine.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Publish official v1.0.0 release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "v1.0.0" --repo "$env:GITHUB_REPOSITORY" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "v1.0.0 already exists; not overwriting release assets."
+            exit 0
+          }
+          gh release create "v1.0.0" "dist/Fallout2-Korean-Text-Engine-Setup.exe" "dist/korean-text-engine.zip" "dist/SHA256SUMS.txt" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "Fallout 2 Korean Text Engine v1.0.0" --notes-file "docs/RELEASE_NOTES.md" --latest
+          if ($LASTEXITCODE -ne 0) { throw "Unable to publish official release." }
