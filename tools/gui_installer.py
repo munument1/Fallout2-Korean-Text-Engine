@@ -16,6 +16,7 @@ import pefile
 from tools import install_engine as engine
 from tools.runtime import sha
 from tools.cjk_provider import download_verified_exe
+from tools.native_pe import SUPPORTED_NATIVE_SHA256, RPU_HRP_SHA256
 
 PROFILE_TITLES = {
     "stock": "Fallout 2 (원본)",
@@ -90,6 +91,38 @@ def detect_profiles(directory, manifest):
     return matches
 
 
+def detect_native_profile(directory):
+    """Auto-select the engine target from an exact verified EXE and mod data.
+
+    Only the stock Win32 1.02d and the independently verified 4.1.8 HRP
+    bootstrap are supported. Other mod families need separate code analysis.
+    """
+    directory = Path(directory)
+    # Et Tu can use an otherwise byte-identical Fallout2.exe while expecting
+    # different mod settings and assets. Do not mislabel it as vanilla.
+    if (directory.name.casefold() == "fallout1in2" or
+            (directory / "mods" / "fallout1in2.dat").is_file() or
+            (directory / "Fallout1in2.cfg").is_file()):
+        return None
+    exe = directory / "fallout2.exe"
+    if not exe.is_file() or exe.is_symlink():
+        return None
+    try:
+        digest = sha(exe.read_bytes())
+        if digest not in SUPPORTED_NATIVE_SHA256:
+            return None
+        marker = directory / "mods" / "rpu.dat"
+        if marker.is_file() and not marker.is_symlink():
+            hi_res = directory / "fallout2HR.exe"
+            if hi_res.exists() and (not hi_res.is_file() or hi_res.is_symlink() or
+                                    sha(hi_res.read_bytes()) != digest):
+                return None
+            return "rpu"
+        return "stock"
+    except OSError:
+        return None
+
+
 def guess_profile(directory, matches):
     """Select only when unambiguous or the Et Tu directory is distinctive."""
     if len(matches) == 1:
@@ -162,15 +195,17 @@ class Installer(tk.Tk):
         ttk.Label(outer, textvariable=self.summary, wraplength=670,
                   foreground="#555").pack(anchor="w", pady=(3, 7))
 
-        ttk.Label(outer, text="게임 종류", font=("Malgun Gothic", 9, "bold")).pack(anchor="w")
+        if not self.native_mode:
+            ttk.Label(outer, text="게임 종류", font=("Malgun Gothic", 9, "bold")).pack(anchor="w")
         self.combo = ttk.Combobox(outer, textvariable=self.profile_title,
                                   state="readonly", values=list(PROFILE_TITLES.values()),
                                   width=48)
-        self.combo.pack(anchor="w", pady=(2, 10))
+        if not self.native_mode:
+            self.combo.pack(anchor="w", pady=(2, 10))
 
         if self.native_mode:
             ttk.Label(outer,
-                      text="순정 US 1.02d EXE에 자체 한국어 훅을 적용합니다. CJK 파일/외부 다운로드 불필요.",
+                      text="순정 US 1.02d / 검증된 RPU 고해상도 패치 EXE를 자동 인식합니다. 게임 종류 선택 및 CJK 파일 불필요.",
                       foreground="#555", wraplength=670).pack(anchor="w", pady=(2, 8))
         elif self.experimental:
             ttk.Label(outer, text="독립형 글꼴 렌더러 시험판: 기존 CJK DLL은 사용하지 않습니다.",
@@ -194,7 +229,8 @@ class Installer(tk.Tk):
         ttk.Checkbutton(outer, text="고급 설정 (추가 원본 EXE · 메뉴 설정)",
                         variable=self.advanced, command=self._toggle_advanced).pack(anchor="w")
         self.advanced_frame = ttk.Frame(outer)
-        self._file_row(self.advanced_frame, "원본 Fallout 2 US 1.02d EXE (일부 모드에서 필요)", self.base)
+        if not self.native_mode:
+            self._file_row(self.advanced_frame, "원본 Fallout 2 US 1.02d EXE (일부 모드에서 필요)", self.base)
         ttk.Checkbutton(self.advanced_frame, text="기존 메뉴 표시 설정 유지",
                         variable=self.keep_menu).pack(anchor="w", pady=(4, 3))
         ttk.Checkbutton(self.advanced_frame,
@@ -274,9 +310,19 @@ class Installer(tk.Tk):
             return
         try:
             path = engine.validate_target(path)
-            matches = detect_profiles(path, self.manifest)
             if self.native_mode:
-                matches = [key for key in matches if key == "stock"]
+                profile = detect_native_profile(path)
+                if profile:
+                    self.profile_title.set(PROFILE_TITLES[profile])
+                    digest = sha((path / "fallout2.exe").read_bytes())
+                    extra = " (기존 고해상도 패치 보존)" if digest == RPU_HRP_SHA256 else ""
+                    self.summary.set("자동 판별: " + PROFILE_TITLES[profile] + extra)
+                elif (path / engine.BACKUP / "manifest.json").is_file():
+                    self.summary.set("이미 설치된 폴더입니다. 기존 설치기를 이용해 복구하세요.")
+                else:
+                    self.summary.set("아직 검증되지 않은 EXE입니다. 지원 대상: 순정 US 1.02d 또는 검증된 RPU 고해상도 패치 EXE.")
+                return
+            matches = detect_profiles(path, self.manifest)
             self.combo.configure(values=[PROFILE_TITLES[key] for key in matches])
             selected = guess_profile(path, matches)
             if selected:
@@ -310,9 +356,14 @@ class Installer(tk.Tk):
         if not self.target.get():
             raise ValueError("게임 폴더를 선택하세요.")
         target = engine.validate_target(Path(self.target.get()))
-        profile = PROFILE_BY_TITLE.get(self.profile_title.get())
-        if not profile or profile not in detect_profiles(target, self.manifest):
-            raise ValueError("지원하는 게임 종류를 선택하세요. 원본 파일 버전이 다르면 설치할 수 없습니다.")
+        if self.native_mode:
+            profile = detect_native_profile(target)
+            if not profile:
+                raise ValueError("지원되지 않는 실행 파일입니다. 순정 US 1.02d 또는 검증된 RPU 고해상도 패치 버전만 자동 설치할 수 있습니다.")
+        else:
+            profile = PROFILE_BY_TITLE.get(self.profile_title.get())
+            if not profile or profile not in detect_profiles(target, self.manifest):
+                raise ValueError("지원하는 게임 종류를 선택하세요. 원본 파일 버전이 다르면 설치할 수 없습니다.")
         if self.native_mode:
             cjk_exe, legacy = None, None
             standalone = engine.ROOT / "standalone-font.dll"
@@ -343,7 +394,7 @@ class Installer(tk.Tk):
         profile_spec = self.manifest["profiles"][profile]
         game_exe = target / profile_spec["exe"]
         stock = None
-        if sha(game_exe.read_bytes()) != self.manifest["stock_sha256"]:
+        if not self.native_mode and sha(game_exe.read_bytes()) != self.manifest["stock_sha256"]:
             stock = Path(self.base.get()) if self.base.get() else suggest_stock_exe(target, self.manifest)
             if stock is None:
                 selection = filedialog.askopenfilename(parent=self,
@@ -358,7 +409,8 @@ class Installer(tk.Tk):
             profile=profile, cjk_exe=cjk_exe, legacy_font=legacy,
             standalone_font=standalone,
             native_exe=self.native_mode,
-            base_exe=stock, keep_menu_settings=self.keep_menu.get(),
+            base_exe=stock, keep_menu_settings=(self.keep_menu.get() or
+                                               (self.native_mode and profile == "rpu")),
             configure_sfall=self.configure_sfall.get(), dry_run=dry_run)
 
     def _install(self):

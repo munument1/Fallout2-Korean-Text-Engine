@@ -3,9 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.gui_installer import (detect_profiles, find_cjk_files,
+from tools.gui_installer import (detect_profiles, detect_native_profile, find_cjk_files,
                                  guess_profile, self_test, suggest_stock_exe)
 from tools.install_engine import inspect_sfall, validate_target
+from tools.native_pe import STOCK_SHA256, RPU_HRP_SHA256
 from tools.runtime import sha
 
 
@@ -64,6 +65,43 @@ class GuiInstallerTests(unittest.TestCase):
                 "exe": "fallout2.exe", "original_sha256": sha(b"expected exe")
             }}}
             self.assertEqual(detect_profiles(directory, manifest), [])
+
+    def test_native_detect_rejects_unknown_exe_with_rpu_marker(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            (directory / "fallout2.exe").write_bytes(b"pretend HRP patched")
+            (directory / "mods").mkdir()
+            (directory / "mods" / "rpu.dat").write_bytes(b"rpu")
+            self.assertIsNone(detect_native_profile(directory))
+
+    def test_native_detect_refuses_fallout_et_tu_marker_even_with_valid_exe(self):
+        with tempfile.TemporaryDirectory() as temp:
+            game = Path(temp)
+            (game / "mods").mkdir()
+            (game / "mods" / "fallout1in2.dat").write_bytes(b"mod marker")
+            self.assertIsNone(detect_native_profile(game))
+
+    @unittest.skipUnless(__import__("os").environ.get("KOREAN_ENGINE_RPU_EXE"),
+                         "Owner RPU game EXE unavailable")
+    def test_real_rpu_detects_without_game_type_selection(self):
+        from os import environ
+        game = Path(environ["KOREAN_ENGINE_RPU_EXE"]).parent
+        self.assertEqual(detect_native_profile(game), "rpu")
+        with tempfile.TemporaryDirectory() as temp:
+            staged = Path(temp)
+            (staged / "mods").mkdir()
+            (staged / "mods" / "rpu.dat").write_bytes(b"stub test marker")
+            (staged / "fallout2.exe").write_bytes(Path(environ["KOREAN_ENGINE_RPU_EXE"]).read_bytes())
+            (staged / "fallout2HR.exe").write_bytes(b"unexpected hrp exe")
+            self.assertIsNone(detect_native_profile(staged))
+
+    @unittest.skipUnless(__import__("os").environ.get("KOREAN_ENGINE_STOCK_EXE"),
+                         "Owner stock game EXE unavailable")
+    def test_real_stock_is_autodetected(self):
+        from os import environ
+        stock = Path(environ["KOREAN_ENGINE_STOCK_EXE"])
+        self.assertEqual(sha(stock.read_bytes()), STOCK_SHA256)
+        self.assertEqual(detect_native_profile(stock.parent), "stock")
 
     def test_missing_profile_dependency_is_not_detected(self):
         with tempfile.TemporaryDirectory() as temp:

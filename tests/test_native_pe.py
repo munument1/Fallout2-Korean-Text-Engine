@@ -8,7 +8,7 @@ import unittest
 import pefile
 from tools.native_pe import (
     _startup_stub, native_exe, HOOK_VA, BOOT_VA,
-    IAT_GETPROCADDRESS, IAT_LOADLIBRARYA, STOCK_SHA256,
+    IAT_GETPROCADDRESS, IAT_LOADLIBRARYA, STOCK_SHA256, RPU_HRP_SHA256,
 )
 from tools.runtime import sfall_crc
 
@@ -48,6 +48,24 @@ class NativePEOwnerInputTests(unittest.TestCase):
         self.assertNotEqual(src, patch1)
         with self.assertRaisesRegex(ValueError, "only verified stock"):
             native_exe(patch1)
+
+
+@unittest.skipUnless(os.environ.get("KOREAN_ENGINE_RPU_EXE"), "Owner HRP-patched EXE unavailable")
+class NativePERpuOwnerInputTests(unittest.TestCase):
+    def test_rpu_bootstrap_remains_identical_when_adding_korean_section(self):
+        src = Path(os.environ["KOREAN_ENGINE_RPU_EXE"]).read_bytes()
+        self.assertEqual(hashlib.sha256(src).hexdigest(), RPU_HRP_SHA256)
+        dst = native_exe(src)
+        self.assertEqual(dst, native_exe(src))
+        self.assertEqual(dst[0xD4880:0xD488A], src[0xD4880:0xD488A])
+        self.assertEqual(dst[0xEE5C0:0xEE5E7], src[0xEE5C0:0xEE5E7])
+        pe = pefile.PE(data=dst)
+        self.assertEqual(pe.sections[-1].Name.rstrip(b"\0"), b".krinit")
+        self.assertEqual(pe.FILE_HEADER.NumberOfSections, 7)
+        self.assertIn(b"f2_res.dll", dst[:len(src)])
+        self.assertIn(b"fallout2font.dll", dst)
+        with self.assertRaisesRegex(ValueError, "only verified"):
+            native_exe(dst)
 
 
 if __name__ == "__main__":
