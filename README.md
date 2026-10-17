@@ -10,11 +10,11 @@
 
 중국어 수정 EXE·DLL이나 게임 종류 선택이 필요 없습니다. 위 시험판 설치기를 실행하고 **게임/모드 복사본 폴더만 지정**하면, 기존 Fallout 2 실행 파일들의 내부 엔진 구조를 검사해 호환되는 파일을 함께 백업·패치합니다. 글꼴 엔진만으로 게임의 영문 MSG가 자동 번역되는 것은 아닙니다.
 
-모드 업데이트로 EXE 전체 해시가 바뀌더라도 핵심 Watcom ABI가 같으면 적용할 수 있지만, **모든 업데이트를 보장하지는 않습니다.** RPU·Et Tu·Sonora·Nevada·Olympus 2207 복사본의 구조 호환성을 확인했습니다. alpha.8부터 Olympus의 다중 CFG 파일 및 Extended sfall 특수 CRC 형식을 보존하며, alpha.9는 오래된 순정 전용 안내문을 범용 설치 방식에 맞게 수정했습니다. Resurrection은 구형 sfall 3.2a의 크기 검사 때문에 **별도 최신 sfall 호환성 검토가 필요**합니다. 오래된 DLL을 설치기가 멋대로 교체하지 않습니다. 같은 복사본에서 설치·복구를 반복해도 과거 백업 기록을 보존합니다. 자세한 적용 범위는 [범용 설치기 검증 기록](docs/UNIVERSAL_STRUCTURAL_INSTALLER_KO.md)을 확인하세요.
+모드 업데이트로 EXE 전체 해시가 바뀌더라도 핵심 Watcom ABI가 같으면 적용할 수 있지만, **모든 업데이트를 보장하지는 않습니다.** RPU·Et Tu·Sonora·Nevada·Olympus 2207 복사본의 구조 호환성을 확인했습니다. alpha.8부터 Olympus의 다중 CFG 파일 및 Extended sfall 특수 CRC 형식을 보존하며, alpha.9는 오래된 순정 전용 안내문을 범용 설치 방식에 맞게 수정했습니다. **Resurrection 1.5는 새 범용 엔진 정식 지원 대상에서 제외합니다.** 원래의 구형 sfall/HRP 구성과 충돌하므로 [기존 한국어 패치 KR1.1 정식판](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/Resurrection-V1.5-KR1.1)을 그대로 사용하는 것을 권장합니다. 새 설치기는 Resurrection 전용 `fores.exe`·`fores.cfg`·`FALLOUT2` 구조를 감지하면 변경 전에 설치를 거부합니다. 같은 복사본에서 설치·복구를 반복해도 과거 백업 기록을 보존합니다. 자세한 적용 범위는 [범용 설치기 검증 기록](docs/UNIVERSAL_STRUCTURAL_INSTALLER_KO.md)을 확인하세요.
 
 베타에서는 복잡한 게임 종류 선택과 사용하지 않는 네이티브 모드 고급 설정을 숨겼습니다. **전체 게임 복사본을 자동 생성하지 않고** 수정되는 파일 원본만 `korean_engine_backup_v2`에 보관해 되돌릴 수 있습니다. EXE 자체를 패치하므로 최소한의 복구 사본은 안전을 위해 유지합니다. 메뉴·기동을 검증했지만 긴 대화·전투·저장/불러오기 전수 검증을 끝낸 **정식판은 아닙니다.**
 
-**beta.2:** Resurrection 1.5처럼 별도의 `fores.exe`로 실행하면서 확장자 없는 `FALLOUT2` PE를 사용하는 게임도 구조 검사로 인식합니다. 런처는 변경하지 않고 게임 엔진 파일만 패치합니다. 해당 게임의 구형 sfall은 패치 후 EXE 크기 오류를 일으킬 수 있습니다. 실제 독립 시험본에서는 호환되는 sfall 4.5.1 및 `ddraw.ini`의 `[Main] HiResMode=0`으로 기동 창을 확인했습니다. **설치기가 sfall DLL을 자동 교체하는 것은 아닙니다.** 따라서 사용자 모드 버전의 sfall 호환성을 먼저 확인하세요.
+**이전 beta.2 실험 기록:** Resurrection 1.5처럼 별도의 `fores.exe`로 실행하면서 확장자 없는 `FALLOUT2` PE를 사용하는 게임까지 구조 검사로 인식했던 버전입니다. 당시 베타 바이너리는 Resurrection을 차단하지 않으므로 사용하지 마세요. 런처는 변경하지 않고 게임 엔진 파일만 패치합니다. 해당 게임의 구형 sfall은 패치 후 EXE 크기 오류를 일으킬 수 있습니다. 실제 독립 시험본에서는 호환되는 sfall 4.5.1 및 `ddraw.ini`의 `[Main] HiResMode=0`으로 기동 창을 확인했습니다. **설치기가 sfall DLL을 자동 교체하는 것은 아닙니다.** 따라서 사용자 모드 버전의 sfall 호환성을 먼저 확인하세요.
 
 ## 기존 CJK 기반 안정판 다운로드
 
