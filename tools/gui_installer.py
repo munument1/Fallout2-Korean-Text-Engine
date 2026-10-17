@@ -451,9 +451,19 @@ class Installer(tk.Tk):
             arguments.dry_run = False
             outcome = engine.install(arguments, target)
             self._append("설치 완료: " + json.dumps(outcome, ensure_ascii=False))
-            messagebox.showinfo("설치 완료",
-                "한국어 출력 엔진을 설치했습니다.\n"
-                "이제 해당 게임의 한국어 번역 패치를 적용하세요.", parent=self)
+            if self.native_mode and not outcome.get("korean_translation_detected"):
+                completion = (
+                    "한국어 출력 엔진을 설치했습니다.\n"
+                    "현재 한국어 MSG 번역이 감지되지 않아 언어 설정은 유지했습니다.\n"
+                    "한국어 번역 ZIP을 적용한 뒤 엔진을 복구하고 다시 설치하면 "
+                    "한국어 언어 설정이 자동 반영됩니다."
+                )
+            else:
+                completion = (
+                    "한국어 출력 엔진을 설치했습니다.\n"
+                    "별도로 적용한 한국어 번역문을 게임에서 확인하세요."
+                )
+            messagebox.showinfo("설치 완료", completion, parent=self)
             self.summary.set("설치 완료 · 필요하면 복구 버튼으로 원상 복구할 수 있습니다.")
 
     def _restore(self):

@@ -17,6 +17,22 @@ else:
 ROOT = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
 STEAM = Path(r'C:\Games\Steam\steamapps\common\Fallout 2').resolve()
 BACKUP = 'korean_engine_backup_v2'
+RESURRECTION_LEGACY_PATCH = (
+    'https://github.com/munument1/Fallout-1.5-Resurrection-KR/'
+    'releases/tag/Resurrection-V1.5-KR1.1'
+)
+
+
+def is_legacy_resurrection(target):
+    """Identify the archive 1.5 game with its distinct launcher and engine.
+
+    The historical Korean patch uses a legacy sfall renderer that should stay
+    together with its own executable and high-resolution patch settings.
+    An extensionless PE alone is not enough: other compatible games may use it.
+    """
+    root = Path(target)
+    return all((root / name).is_file() and not (root / name).is_symlink()
+               for name in ('fores.exe', 'fores.cfg', 'FALLOUT2'))
 
 
 def detect_native_executables(target):
@@ -27,6 +43,11 @@ def detect_native_executables(target):
     validator. A changed engine ABI is an error, not permission to patch just
     the other launcher and leave a partly translated installation.
     """
+    if is_legacy_resurrection(target):
+        raise ValueError('Fallout 1.5 Resurrection: 기존 한국어 패치 KR1.1을 사용하세요. '
+                         '구형 sfall 및 고해상도 설정의 호환성 문제로 새 독립형 '
+                         '설치기에서 제외했습니다. 기존 게임 파일은 변경하지 않습니다. '
+                         '다운로드: ' + RESURRECTION_LEGACY_PATCH)
     try:
         from .native_pe import inspect_native_exe
     except ImportError:
@@ -137,11 +158,22 @@ def validate_target(target):
 def atomic(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.korean-tmp')
-    with temporary.open('xb') as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
+    created = False
+    try:
+        with temporary.open('xb') as handle:
+            created = True
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        # A failed write or rename must not block the next install attempt.
+        # Never remove a temporary file that already existed before this call.
+        if created:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def checked_destination(target, name):
@@ -400,14 +432,15 @@ def install_native(args, target, manifest):
         if updated.encode(encoding) != current_ini:
             payload['ddraw.ini'] = updated.encode(encoding)
     cfg_path = checked_destination(target, config_name)
-    text, encoding = decode_ini(cfg_path.read_bytes())
+    config_original = cfg_path.read_bytes()
+    text, encoding = decode_ini(config_original)
     has_translation = has_native_korean_text(target)
     if has_translation:
         updated_cfg = put_ini(text, 'system', 'language', 'korean').encode(encoding)
         if updated_cfg != cfg_path.read_bytes():
             payload[config_name] = updated_cfg
     backup = Path(target) / BACKUP
-    if backup.exists():
+    if backup.exists() or backup.is_symlink():
         raise ValueError('Existing Korean engine backup found; restore before reinstalling.')
     for name in payload:
         path = checked_destination(target, name)
@@ -418,11 +451,81 @@ def install_native(args, target, manifest):
         'dry_run': args.dry_run, 'executables': sorted(original_exes),
         'config': config_name, 'sfall_status': sfall['status'], 'sfall_unchanged': True,
         'korean_translation_detected': has_translation,
-        'sfall_ini_modified': 'ddraw.ini' in payload, 'sfall_crc_added': bool(crcs),
+        'sfall_ini_modified': 'ddraw.ini' in payload,
+        'sfall_crc_added': 'ddraw.ini' in payload and bool(crcs),
         'exe_crcs': crcs, 'files': sorted(payload),
     }
     if args.dry_run:
         return report
+
+    # Snapshot every source before writing. Updates racing with the scan must
+    # not be overwritten by a patch derived from earlier executable bytes.
+    source_bytes = {}
+    for name in payload:
+        path = checked_destination(target, name)
+        source_bytes[name] = path.read_bytes() if path.exists() else None
+        if name in original_exes and source_bytes[name] != original_exes[name]:
+            raise ValueError('Game executable changed during compatibility inspection: ' + name)
+    if 'ddraw.ini' in payload and source_bytes['ddraw.ini'] != current_ini:
+        raise ValueError('sfall configuration changed during compatibility inspection.')
+    if config_name in payload and source_bytes[config_name] != config_original:
+        raise ValueError('Game configuration changed during compatibility inspection.')
+    if sfall['enabled'] and sha(sfall_path.read_bytes()) != sfall_hash:
+        raise ValueError('Existing sfall DLL changed during compatibility inspection.')
+
+    state = {'before': {name: sha(data) if data is not None else None
+                        for name, data in source_bytes.items()},
+             'after': {name: sha(data) for name, data in payload.items()}}
+    # Prepare a complete backup in a staging directory. An interrupted copy
+    # cannot leave a backup named as if a valid installation were underway.
+    staging = Path(tempfile.mkdtemp(prefix=BACKUP + '-staging-', dir=target))
+    try:
+        for name, previous in source_bytes.items():
+            if previous is None:
+                continue
+            destination = staging / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(checked_destination(target, name), destination)
+            if destination.read_bytes() != previous:
+                raise ValueError('Game file changed while preparing its backup: ' + name)
+        (staging / 'manifest.json').write_text(json.dumps(state, indent=2), encoding='utf-8')
+        for name, previous in source_bytes.items():
+            path = checked_destination(target, name)
+            if (path.read_bytes() if path.exists() else None) != previous:
+                raise ValueError('Game file changed while preparing its backup: ' + name)
+        if sfall['enabled'] and sha(sfall_path.read_bytes()) != sfall_hash:
+            raise ValueError('Existing sfall DLL changed while preparing its backup.')
+        staging.rename(backup)
+    except Exception:
+        if staging.exists():
+            shutil.rmtree(staging)
+        raise
+
+    touched = []
+    try:
+        for name, data in payload.items():
+            atomic(checked_destination(target, name), data)
+            touched.append(name)
+        if sfall['enabled'] and sha(sfall_path.read_bytes()) != sfall_hash:
+            raise ValueError('Existing sfall DLL changed during installation.')
+    except Exception as error:
+        rollback_errors = []
+        for name in reversed(touched):
+            path = checked_destination(target, name)
+            try:
+                if state['before'][name] is None:
+                    path.unlink()
+                else:
+                    atomic(path, (backup / name).read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f'{name}: {rollback_error}')
+        if rollback_errors:
+            raise RuntimeError('Installation failed and recovery is incomplete. '
+                               'Keep the backup for manual recovery: ' +
+                               '; '.join(rollback_errors)) from error
+        shutil.rmtree(backup)
+        raise
+    return report
     backup.mkdir()
     state = {'before': {}, 'after': {name: sha(data) for name, data in payload.items()}}
     for name in payload:

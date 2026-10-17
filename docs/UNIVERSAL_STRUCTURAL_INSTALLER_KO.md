@@ -2,6 +2,21 @@
 
 2026-10-17 | 개발 브랜치 feature/native-structural-autodetect
 
+## 정식판 지원 범위 변경 (2026-10-18)
+
+**Fallout 1.5 Resurrection은 범용 독립형 설치기 지원 대상에서 제외한다.**
+Resurrection 1.5는 구형 sfall과 독자적인 고해상도 패치를 사용하므로, 자체 EXE 섹션을
+추가하는 설치기는 구형 sfall의 크기 검사와 충돌한다. 최신 공식 sfall로 바꾸더라도
+고해상도 설정 수정 및 장시간 호환성 재검증이 필요하다. 원본 모드의 장기 업데이트가
+종료된 상황에서는 기존 배포를 유지하는 편이 안전하다.
+
+사용자는 [Resurrection KR1.1 기존 정식 한글 패치](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/Resurrection-V1.5-KR1.1)를 이용한다.
+이후 독립형 설치기는 Resurrection 고유의 `fores.exe`, `fores.cfg`, 확장자 없는
+`FALLOUT2`가 함께 있으면 **아무 파일도 변경하기 전에 명시적으로 거부**한다.
+기존 beta.2 실험 기록은 역사적 검증 결과로 보존하고, 아래 표의 호환성 검증은
+향후 정식판의 지원 약속으로 해석하지 않는다. 과거 독립형 엔진 설치를 한 경우
+기존 설치기의 복구 기능은 계속 이용할 수 있다.
+
 ## 목표
 
 게임 이름·모드 버전·EXE 전체 SHA-256 목록을 수동으로 갱신하지 않고
