@@ -132,7 +132,7 @@ def guess_profile(directory, matches):
     return None
 
 
-def self_test():
+def self_test(require_native=False):
     """CI tests the bundled manifest/adapter without modifying a game."""
     manifest = manifest_data()
     for name, expected in manifest["assets"].items():
@@ -148,6 +148,10 @@ def self_test():
                    if symbol.name}
         if pe.FILE_HEADER.Machine != 0x14c or not required <= exports:
             raise ValueError("Bundled experimental font DLL has wrong ABI.")
+        if require_native and "InitKoreanEngine" not in exports:
+            raise ValueError("Bundled DLL lacks InitKoreanEngine native entry point.")
+    elif require_native:
+        raise ValueError("Native installer build is missing standalone-font.dll.")
     return 0
 
 
@@ -184,7 +188,7 @@ class Installer(tk.Tk):
 
         ttk.Label(outer, text="Fallout 2 한국어 출력 엔진",
                   font=("Malgun Gothic", 17, "bold")).pack(anchor="w")
-        ttk.Label(outer, text=("독립형 공개 베타: Fallout 2 계열 게임/모드 폴더 하나만 선택하세요."
+        ttk.Label(outer, text=("독립형 한국어 출력 엔진: Fallout 2 계열 게임/모드 폴더 하나만 선택하세요."
                                if self.native_mode else
                                "시험판: 게임 폴더만 선택 → 확인 후 설치. 기존 파일 자동 백업."
                                if self.experimental else
@@ -484,7 +488,7 @@ class Installer(tk.Tk):
 
     def _help(self):
         if self.native_mode:
-            messagebox.showinfo("Fallout 2 범용 독립형 한국어 엔진 베타",
+            messagebox.showinfo("Fallout 2 범용 독립형 한국어 엔진",
                 "① Fallout 2 계열 게임 또는 모드를 별도 폴더에 백업합니다.\n"
                 "② 게임 폴더만 지정하세요. 게임 종류 선택이나 중국어 CJK 파일은 필요 없습니다.\n"
                 "③ 호환 Watcom EXE를 구조 검사한 뒤 원본을 백업하고 한국어 로더를 설치합니다.\n"
@@ -523,11 +527,13 @@ class Installer(tk.Tk):
 
 if __name__ == "__main__":
     try:
+        if "--native-self-test" in sys.argv:
+            raise SystemExit(self_test(require_native=True))
         if "--self-test" in sys.argv:
             raise SystemExit(self_test())
         Installer().mainloop()
     except Exception as error:
-        if "--self-test" in sys.argv:
+        if "--self-test" in sys.argv or "--native-self-test" in sys.argv:
             print(error, file=sys.stderr)
             raise SystemExit(1)
         raise
