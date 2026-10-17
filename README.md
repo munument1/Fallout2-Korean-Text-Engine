@@ -1,5 +1,27 @@
 # Fallout 2 Korean Text Engine
 
+## 최신 권장 설치: 독립형 한국어 엔진 v1.2.0-beta.2
+
+**[독립형 Windows 설치기 다운로드](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/tag/v1.2.0-beta.2)** — 게임 종류 선택이나 중국어 CJK 수정 EXE·DLL 없이 게임 폴더만 지정합니다.
+Fallout 2 계열 실행 파일의 Watcom ABI 구조를 확인하고 호환되는 EXE를 패치합니다. 확장자 없는 Resurrection 1.5 게임 파일도 지원하며 런처는 보존합니다.
+
+설치 순서는 **각 게임의 한국어 번역 ZIP 먼저 적용 → 독립형 엔진 설치기 실행 → 기존 게임 런처로 실행**입니다.
+전체 게임을 중복 복사하지 않고 수정되는 파일의 원본만 최소한으로 보관해 복구할 수 있습니다.
+모든 모드 업데이트를 무조건 보장하지 않으며 대화·전투·저장/로드 전수 시험 전의 **공개 베타**입니다.
+
+완료된 번역 데이터: [Nevada](https://github.com/munument1/Fallout2-Nevada-KR/releases/tag/v2026.10.17-native-beta.1) ·
+[Olympus 2207](https://github.com/munument1/Fallout2-Olympus2207-KR/releases/tag/v2026.10.17-native-beta.1) ·
+[Resurrection 1.5](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/v2026.10.17-native-beta.2) ·
+[Sonora 1.16.4/공유 DLC 텍스트](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v1.16.4-native-beta.2).
+Sonora eng_repack 개발본 번역은 [별도 릴리스](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v2026.10.17-native-beta.1)로 유지합니다.
+Et Tu와 RPU는 upstream 업데이트 작업이 남아 있어 현재 번역 이행 PR만 준비된 상태입니다.
+
+---
+
+## 이전 CJK 기반 설치 방법 (기술 기록)
+
+**이 아래의 게임별 프로필, 중국어 CJK 실행 파일 및 글꼴 DLL 설치 안내는 이전 방식입니다. 신규 설치에는 사용하지 마세요.**
+
 공식 sfall DLL을 수정하지 않고 클래식 Fallout 2에 CP949 한국어 출력·글꼴·줄바꿈을 제공하는 공통 출력 모듈이다. 번역 데이터는 각 모드의 번역 저장소에서 별도로 관리한다.
 
 현재 시험 기준은 **공식 sfall 4.5.1**, TEXT=Galmuri9 / Size 10 / Weight 400, BUTTON=Galmuri11 / Size 14 / Weight 600이다. 게임의 언어는 `language=korean`을 사용한다.
