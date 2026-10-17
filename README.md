@@ -4,13 +4,21 @@
 
 클래식 **Fallout 2와 호환 모드에서 한글을 표시해 주는 프로그램**입니다. 한국어 글꼴과 줄바꿈을 지원하며, 기존 파일은 설치할 때 백업합니다.
 
-## 다운로드
+## 독립형 범용 시험판 (v1.2.0-alpha.7)
+
+**[독립형 Windows 설치기 다운로드 (시험판)](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/tag/v1.2.0-alpha.7)**
+
+중국어 수정 EXE·DLL이나 게임 종류 선택이 필요 없습니다. 위 시험판 설치기를 실행하고 **게임/모드 복사본 폴더만 지정**하면, 기존 Fallout 2 실행 파일들의 내부 엔진 구조를 검사해 호환되는 파일을 함께 백업·패치합니다. 글꼴 엔진만으로 게임의 영문 MSG가 자동 번역되는 것은 아닙니다.
+
+모드 업데이트로 EXE 전체 해시가 바뀌더라도 핵심 Watcom ABI가 같으면 적용할 수 있지만, **모든 업데이트를 보장하지는 않습니다.** RPU·Et Tu·Sonora·Nevada 복사본의 설치와 복원을 확인했습니다. Et Tu의 원본 고해상도 패치 설정 충돌, Resurrection의 구형 sfall 3.2a EXE 크기 검사 제한은 남아 있습니다. 같은 복사본에서 설치·복구를 반복해도 과거 백업 기록을 보존합니다. 상세한 지원 범위는 [범용 설치기 검증 기록](docs/UNIVERSAL_STRUCTURAL_INSTALLER_KO.md)을 확인하세요.
+
+## 기존 CJK 기반 안정판 다운로드
 
 **[Windows 설치기 다운로드 (.exe)](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/latest/download/Fallout2-Korean-Text-Engine-Setup.exe)**
 
 Python이나 명령어 입력 없이 실행할 수 있습니다.
 
-## 설치 방법
+## 기존 CJK 기반 설치 방법
 
 1. **게임 준비:** Fallout 2 또는 지원 모드를 별도 폴더에 준비합니다. **순정 Fallout 2에서 sfall 없이 설치하는 구성은 지원 대상으로 추가했으며 실제 실행 검증은 아직 필요합니다.** 모드에 sfall이 포함되어 있다면 기존 파일을 그대로 둡니다.
 2. **설치기 실행:** 게임 폴더와 직접 확보한 **FO2_UPU_CHT_v34의 CJK 파일 폴더**를 선택합니다.
@@ -20,7 +28,7 @@ CJK 원본 폴더에는 해당 패키지의 `Fallout2.exe`와 `fallout2font.dll`
 
 **설치 전 상태로 되돌리기:** 설치기에서 같은 게임 폴더를 선택한 후 **「설치 전 상태로 복구」**를 누르세요. 게임별 번역 패치로 별도 설치한 파일은 복구 대상이 아닙니다.
 
-## 지원 게임
+## 기존 CJK 방식 지원 게임
 
 Fallout 2 원본 / Restoration Project Updated / Fallout Et Tu / Fallout Sonora / Fallout Nevada Extended / Olympus 2207 / Fallout 1.5 Resurrection
 

@@ -128,6 +128,8 @@ def checked_destination(target, name):
 def restore(target, dry_run):
     import re
     backup = target / BACKUP
+    if backup.is_symlink() or not backup.is_dir():
+        raise ValueError('No valid Korean engine backup directory found.')
     state = json.loads((backup / 'manifest.json').read_text(encoding='utf-8'))
     if set(state['before']) != set(state['after']):
         raise ValueError('Invalid recovery manifest.')
@@ -171,9 +173,14 @@ def restore(target, dry_run):
                     cfg_merges[name] = current_text.encode(current_encoding)
                     continue
             raise ValueError(f'Installed file changed; manual recovery needed: {name}')
+    # Preserve every prior recovery record. A user may install, restore, and
+    # install again; the previous archive must never block a later restore or
+    # be overwritten. Treat dangling symlinks as occupied names as well.
     archived = target / (BACKUP + '_restored')
-    if archived.exists():
-        raise ValueError('Prior restored backup exists.')
+    suffix = 2
+    while archived.exists() or archived.is_symlink():
+        archived = target / f'{BACKUP}_restored_{suffix}'
+        suffix += 1
     if not dry_run:
         for name, expected in state['before'].items():
             path = checked_destination(target, name)
@@ -182,7 +189,7 @@ def restore(target, dry_run):
             else:
                 atomic(path, cfg_merges.get(name, (backup / name).read_bytes()))
         backup.rename(archived)
-    return {'operation': 'restore', 'dry_run': dry_run}
+    return {'operation': 'restore', 'dry_run': dry_run, 'archived_backup': archived.name}
 
 
 def read_ini_option(text, section, key):

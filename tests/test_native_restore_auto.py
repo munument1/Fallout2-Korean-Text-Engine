@@ -9,6 +9,31 @@ from tools.runtime import put_ini, sha
 
 
 class NativeRestoreTests(unittest.TestCase):
+    def test_repeated_install_restore_keeps_every_backup_archive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = b'[system]\nlanguage=english\n'
+            installed = b'[system]\nlanguage=korean\n'
+            for number in range(1, 4):
+                backup = root / BACKUP
+                backup.mkdir()
+                (backup / 'fallout2.cfg').write_bytes(original)
+                (backup / 'manifest.json').write_text(json.dumps({
+                    'before': {'fallout2.cfg': sha(original)},
+                    'after': {'fallout2.cfg': sha(installed)},
+                }), encoding='utf-8')
+                (root / 'fallout2.cfg').write_bytes(installed)
+                name = BACKUP + '_restored' + (f'_{number}' if number > 1 else '')
+                self.assertEqual(restore(root, True)['archived_backup'], name)
+                self.assertEqual(restore(root, False)['archived_backup'], name)
+                self.assertEqual((root / 'fallout2.cfg').read_bytes(), original)
+                self.assertFalse(backup.exists())
+                for previous in range(1, number + 1):
+                    archive = root / (BACKUP + '_restored' +
+                                      (f'_{previous}' if previous > 1 else ''))
+                    self.assertTrue(archive.is_dir())
+                    self.assertEqual((archive / 'fallout2.cfg').read_bytes(), original)
+
     def test_restoring_engine_preserves_gameplay_cfg_changes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

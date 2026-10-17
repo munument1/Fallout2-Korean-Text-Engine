@@ -185,6 +185,14 @@ class GuiInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "ddraw.ini"):
                 inspect_sfall(target, {"official_sfall_sha256": "unused"})
 
+    @unittest.skipUnless(__import__('os').environ.get('KOREAN_ENGINE_RESURRECTION_DIR'),
+                         'Owner Resurrection sfall 3.2a files unavailable')
+    def test_resurrection_legacy_sfall_rejected_before_size_check_failure(self):
+        from os import environ
+        target = Path(environ['KOREAN_ENGINE_RESURRECTION_DIR'])
+        with self.assertRaisesRegex(ValueError, 'unverified ddraw.dll'):
+            inspect_sfall(target, {'official_sfall_sha256': 'unused'})
+
     def test_original_steam_directory_is_protected(self):
         with tempfile.TemporaryDirectory() as temp:
             steam = Path(temp) / "steamapps" / "common" / "Fallout 2"
