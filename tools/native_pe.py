@@ -5,7 +5,8 @@ third-party font DLL is read, copied, or downloaded. The stub loads our native
 fallout2font.dll and invokes the InitKoreanEngine export after game startup
 reaches a verified, existing Windows API boundary.
 
-Only exact hash-verified stock Fallout 2 US 1.02d is supported initially.
+Only exact hash-verified US 1.02d and a tested HRP-patched executable are
+supported. Any pre-existing HRP f2_res.dll bootstrap is preserved byte-for-byte.
 """
 import hashlib
 import struct
@@ -13,6 +14,8 @@ import struct
 import pefile
 
 STOCK_SHA256 = "581c09c20fee70edc09ec412ee034e62e89cdefa13092e534ddd17d23f8163cb"
+RPU_HRP_SHA256 = "048684f802b05859e2b160fa358be1b99075bf31b49a312a536645581aa16b5f"
+SUPPORTED_NATIVE_SHA256 = frozenset({STOCK_SHA256, RPU_HRP_SHA256})
 HOOK_VA = 0x4CAF22
 ORIGINAL_INSTRUCTION = bytes.fromhex("a334e45100")  # mov [0x51e434],eax
 BOOT_VA = 0x6F0480
@@ -64,11 +67,11 @@ def _startup_stub():
     return bytes(section)
 
 
-def native_exe(stock):
-    """Return a new executable from exact stock bytes, refusing all other input."""
-    if hashlib.sha256(stock).hexdigest() != STOCK_SHA256:
-        raise ValueError("Native Korean bootstrap supports only verified stock US 1.02d.")
-    pe = pefile.PE(data=stock)
+def native_exe(original):
+    """Patch a verified EXE without discarding any permitted HRP modifications."""
+    if hashlib.sha256(original).hexdigest() not in SUPPORTED_NATIVE_SHA256:
+        raise ValueError("Native Korean bootstrap supports only verified stock US 1.02d or tested HRP-patched EXE.")
+    pe = pefile.PE(data=original)
     if pe.FILE_HEADER.Machine != pefile.MACHINE_TYPE["IMAGE_FILE_MACHINE_I386"]:
         raise ValueError("Only Win32 x86 executable is supported.")
     if pe.OPTIONAL_HEADER.ImageBase != 0x400000 or pe.OPTIONAL_HEADER.AddressOfEntryPoint != 0xE4480:
@@ -80,7 +83,7 @@ def native_exe(stock):
     if iat.get("LoadLibraryA") != IAT_LOADLIBRARYA or iat.get("GetProcAddress") != IAT_GETPROCADDRESS:
         raise ValueError("Original Win32 imports do not match bootstrap assumptions.")
     offset = pe.get_offset_from_rva(HOOK_VA - pe.OPTIONAL_HEADER.ImageBase)
-    if stock[offset:offset + 5] != ORIGINAL_INSTRUCTION:
+    if original[offset:offset + 5] != ORIGINAL_INSTRUCTION:
         raise ValueError("Original game startup instructions differ.")
 
     if pe.FILE_HEADER.NumberOfSections != 6:
@@ -88,14 +91,14 @@ def native_exe(stock):
     sec = pe.sections[-1]
     virt = _align(sec.VirtualAddress + max(sec.Misc_VirtualSize, sec.SizeOfRawData),
                   pe.OPTIONAL_HEADER.SectionAlignment)
-    physical = _align(len(stock), pe.OPTIONAL_HEADER.FileAlignment)
+    physical = _align(len(original), pe.OPTIONAL_HEADER.FileAlignment)
     if virt != 0x2F0000 or physical != 0x122800:
         raise ValueError("Not the supported PE section layout.")
     new_header_offset = pe.sections[0].get_file_offset() + len(pe.sections) * 40
     if new_header_offset + 40 > pe.OPTIONAL_HEADER.SizeOfHeaders:
         raise ValueError("No safe room for native section header.")
 
-    result = bytearray(stock)
+    result = bytearray(original)
     result.extend(b"\0" * (physical - len(result)))
     result.extend(_startup_stub())
     header = bytearray(40)

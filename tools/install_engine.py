@@ -59,7 +59,7 @@ def restore(target, dry_run):
     state = json.loads((backup / 'manifest.json').read_text(encoding='utf-8'))
     if set(state['before']) != set(state['after']):
         raise ValueError('Invalid recovery manifest.')
-    allowed = {'fallout2.exe', 'Fallout2.exe', 'FSonoraDLC.exe', 'Nevada.exe', 'olympus.exe', 'FALLOUT2',
+    allowed = {'fallout2.exe', 'Fallout2.exe', 'fallout2HR.exe', 'FSonoraDLC.exe', 'Nevada.exe', 'olympus.exe', 'FALLOUT2',
                'fallout2.cfg', 'Fallout2.cfg', 'Nevada.cfg', 'olympus.cfg', 'fores.cfg', 'ddraw.ini', 'f2_res.ini',
                'f2_res.dll', 'fallout2font.dll', 'fallout2font_legacy.dll', 'fallout2font.ini',
                'fonts/Galmuri9.ttf', 'fonts/Galmuri11.ttf', 'fonts/Galmuri-LICENSE.txt'}
@@ -221,14 +221,29 @@ def install(args, target):
         required_hashes[name] = expected
     original_path = checked_destination(target, profile['exe'])
     original = original_path.read_bytes()
-    if sha(original) != profile['original_sha256']:
+    native_mode = bool(getattr(args, 'native_exe', False))
+    if native_mode:
+        if args.profile not in ('stock', 'rpu'):
+            raise ValueError('Native Korean engine supports only verified stock US 1.02d and RPU.')
+        if args.profile == 'rpu':
+            rpu_data = checked_destination(target, 'mods/rpu.dat')
+            if not rpu_data.is_file() or rpu_data.is_symlink():
+                raise ValueError('RPU mod data (mods/rpu.dat) is missing.')
+        # Allow exactly the verified native-compatible EXEs. A familiar name
+        # or the presence of RPU mod files must never bypass the hash check.
+        try:
+            from .native_pe import SUPPORTED_NATIVE_SHA256
+        except ImportError:
+            from native_pe import SUPPORTED_NATIVE_SHA256
+        if sha(original) not in SUPPORTED_NATIVE_SHA256:
+            raise ValueError('Unsupported Fallout 2 EXE. Native Korean requires a verified stock US 1.02d or tested HRP-patched EXE.')
+    elif sha(original) != profile['original_sha256']:
         raise ValueError('Original EXE is unsupported or already patched. Restore first.')
     sfall = inspect_sfall(target, manifest)
     sfall_path = checked_destination(target, 'ddraw.dll')
     sfall_hash = sfall['hash']
-    native_mode = bool(getattr(args, 'native_exe', False))
-    if native_mode and (args.profile != 'stock' or not getattr(args, 'standalone_font', None)):
-        raise ValueError('Independent EXE patch is currently validated only for stock US 1.02d with native font DLL.')
+    if native_mode and not getattr(args, 'standalone_font', None):
+        raise ValueError('Independent EXE patch requires the native font DLL.')
     if native_mode and (getattr(args, 'cjk_exe', None) or getattr(args, 'legacy_font', None)):
         raise ValueError('Independent EXE mode must not receive Chinese CJK binaries.')
     standalone_path = getattr(args, 'standalone_font', None)
@@ -269,6 +284,15 @@ def install(args, target):
         if not native_mode and crc != profile['sfall_crc']:
             raise ValueError('Derived EXE CRC mismatch.')
     payload = {profile['exe']: patched}
+    if native_mode and args.profile == 'rpu':
+        # Standard RPU/HRP installations often launch fallout2HR.exe rather
+        # than fallout2.exe. Patch both only if the two originals are identical
+        # and hash verified, so game launchers cannot bypass the Korean engine.
+        hires_path = checked_destination(target, 'fallout2HR.exe')
+        if hires_path.exists():
+            if not hires_path.is_file() or hires_path.is_symlink() or hires_path.read_bytes() != original:
+                raise ValueError('RPU fallout2HR.exe differs from the verified main EXE. Refusing to change either executable.')
+            payload['fallout2HR.exe'] = patched
     if legacy is not None:
         payload['fallout2font_legacy.dll'] = legacy
     # External HRP generates its own monitor bullet, bypassing the EXE constants.
@@ -316,7 +340,9 @@ def install(args, target):
     cfg_path = checked_destination(target, profile['cfg'])
     text, encoding = decode_ini(cfg_path.read_bytes())
     payload[profile['cfg']] = put_ini(text, 'system', 'language', 'korean').encode(encoding)
-    if not args.keep_menu_settings:
+    # Never overwrite RPU's menu layout just because a user left the stock
+    # installer's "keep existing settings" checkbox at its default value.
+    if not args.keep_menu_settings and not (native_mode and args.profile == 'rpu'):
         hr_path = checked_destination(target, 'f2_res.ini')
         text, encoding = decode_ini(hr_path.read_bytes()) if hr_path.exists() else ('', 'ascii')
         values = profile['menu']
@@ -401,8 +427,8 @@ def main():
             if args.legacy_font and args.standalone_font:
                 parser.error('Choose --legacy-font OR --standalone-font, not both')
             if args.native_exe and (args.cjk_exe or args.auto_cjk_exe or args.legacy_font or
-                                    args.profile != 'stock' or not args.standalone_font):
-                parser.error('--native-exe supports stock with --standalone-font only, without CJK inputs')
+                                    args.profile not in ('stock', 'rpu') or not args.standalone_font):
+                parser.error('--native-exe supports verified stock/RPU with --standalone-font only, without CJK inputs')
             if args.auto_cjk_exe and args.cjk_exe:
                 parser.error('Use --auto-cjk-exe OR --cjk-exe, not both')
             if args.native_exe:
