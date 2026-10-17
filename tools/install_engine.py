@@ -17,6 +17,22 @@ else:
 ROOT = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
 STEAM = Path(r'C:\Games\Steam\steamapps\common\Fallout 2').resolve()
 BACKUP = 'korean_engine_backup_v2'
+RESURRECTION_LEGACY_PATCH = (
+    'https://github.com/munument1/Fallout-1.5-Resurrection-KR/'
+    'releases/tag/Resurrection-V1.5-KR1.1'
+)
+
+
+def is_legacy_resurrection(target):
+    """Identify the archive 1.5 game with its distinct launcher and engine.
+
+    The historical Korean patch uses a legacy sfall renderer that should stay
+    together with its own executable and high-resolution patch settings.
+    An extensionless PE alone is not enough: other compatible games may use it.
+    """
+    root = Path(target)
+    return all((root / name).is_file() and not (root / name).is_symlink()
+               for name in ('fores.exe', 'fores.cfg', 'FALLOUT2'))
 
 
 def detect_native_executables(target):
@@ -27,6 +43,11 @@ def detect_native_executables(target):
     validator. A changed engine ABI is an error, not permission to patch just
     the other launcher and leave a partly translated installation.
     """
+    if is_legacy_resurrection(target):
+        raise ValueError('Fallout 1.5 Resurrection: keep the existing Korean KR1.1 '
+                         'patch and original sfall/HRP configuration. This native '
+                         'installer intentionally excludes Resurrection. See: '
+                         + RESURRECTION_LEGACY_PATCH)
     try:
         from .native_pe import inspect_native_exe
     except ImportError:
