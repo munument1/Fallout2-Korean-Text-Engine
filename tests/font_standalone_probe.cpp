@@ -22,10 +22,12 @@ int wmain(int argc, wchar_t** argv) {
     auto outputX = reinterpret_cast<int(__cdecl*)(const char*, int*, int*, int, BYTE*, int)>(GetProcAddress(dll, "TextOutputX"));
     auto wordWrap = reinterpret_cast<int(__cdecl*)(const char*, int, short*, short*)>(GetProcAddress(dll, "KoreanWordWrap"));
     auto scopedWordWrap = reinterpret_cast<int(__cdecl*)(const char*, int, short*, short*, uintptr_t)>(GetProcAddress(dll, "KoreanWordWrapForCaller"));
+    auto isUiKnob = reinterpret_cast<int(__cdecl*)(const char*, int)>(
+        GetProcAddress(dll, "IsGameUiKnobPrefix"));
     auto nativeWordWrap = GetProcAddress(dll, "NativeWordWrap");
     if (!init || !clear || !select || !getWidth || !getHeight ||
         !output || !split || !outputL || !outputX ||
-        !wordWrap || !scopedWordWrap || !nativeWordWrap) return 4;
+        !wordWrap || !scopedWordWrap || !nativeWordWrap || !isUiKnob) return 4;
     init();
     if (GetModuleHandleW(L"fallout2font_legacy.dll")) return 5;
     int failures = 0;
@@ -35,6 +37,41 @@ int wmain(int argc, wchar_t** argv) {
         printf("font=%d height=%d\n", id, height);
         if (height < 6 || height > 64) ++failures;
         if (getWidth("Hello\r\n") != getWidth("Hello") || getWidth("\r") != 0) ++failures;
+        // The vanilla UI's 0x95 marker has two forms: an isolated monitor
+        // marker, and a prefix before dialog options. Both must be visible.
+        // Unlike 0x95 B0 (a genuine two-byte CP949 syllable), 0x95 B0 A1
+        // represents the marker followed by the CP949 syllable GA.
+        const char knobOnly[] = {char(0x95), '\0'};
+        const char knobOption[] = {char(0x95), ' ', char(0xb0), char(0xa1), '\0'};
+        const char knobHangul[] = {char(0x95), char(0xb0), char(0xa1), '\0'};
+        const char realCp949[] = {char(0x95), char(0xb0), '\0'};
+        const char realCp949WithText[] = {char(0x95), char(0xb0), '.', '\0'};
+        const char hangulGa[] = {char(0xb0), char(0xa1), '\0'};
+        const char numberedOption[] = {'1', '.', ' ', char(0xb0), char(0xa1), '\0'};
+        if (!isUiKnob(knobOnly, 1) || !isUiKnob(knobOption, 4) ||
+            !isUiKnob(knobHangul, 3) || isUiKnob(realCp949, 2) ||
+            isUiKnob(realCp949WithText, 3) || isUiKnob(numberedOption, 5) ||
+            getWidth(knobOnly) < 2 ||
+            getWidth(knobHangul) <= getWidth(hangulGa) ||
+            getWidth(realCp949) < 2 || getWidth(numberedOption) <= getWidth(hangulGa))
+            ++failures;
+        std::vector<BYTE> markerPixels(64 * 64 + 32, 0);
+        std::fill(markerPixels.end() - 32, markerPixels.end(), static_cast<BYTE>(0xa5));
+        output(knobOnly, 64, 64, markerPixels.data(), 200);
+        if (std::count(markerPixels.begin(), markerPixels.end() - 32, static_cast<BYTE>(200)) < 2 ||
+            !std::all_of(markerPixels.end() - 32, markerPixels.end(),
+                    [](BYTE value) { return value == 0xa5; }))
+            ++failures;
+        for (auto marker : {std::string(knobOnly), std::string(knobOption),
+                            std::string(knobHangul), std::string(realCp949)}) {
+            short starts[64]{}, count = 0;
+            if (split(marker.c_str(), starts, &count, 200) || count != 2 ||
+                starts[0] != 0 || starts[1] != marker.size())
+                ++failures;
+            if (wordWrap(marker.c_str(), 200, starts, &count) || count != 2 ||
+                starts[0] != 0 || starts[1] != marker.size())
+                ++failures;
+        }
         std::string hangul;
         // Full 11,172 modern Hangul syllables and CP949 extension trail bytes.
         for (wchar_t ch = 0xac00; ch <= 0xd7a3; ++ch) {

@@ -44,12 +44,30 @@ int nextBytes(const char* s, int available) {
     return 1;
 }
 
+// Fallout 2 uses 0x95 as its UI bullet (display monitor and dialog options).
+// 0x95 is ALSO a valid CP949 lead byte. Treat it as a control glyph only when
+// it is the first byte of a renderer string AND the remainder is independently
+// valid CP949. This distinguishes a genuine CP949 pair such as 95 B0 from
+// a monitor marker followed by Hangul (95 B0 A1 ...).
+bool uiKnobPrefix(const char* text, int length) {
+    if (!text || length < 1 || static_cast<BYTE>(text[0]) != 0x95)
+        return false;
+    if (length == 1)
+        return true;
+    return MultiByteToWideChar(codePage, MB_ERR_INVALID_CHARS,
+                               text + 1, length - 1, nullptr, 0) > 0;
+}
+
 std::wstring unicode(const char* text, int length) {
     std::wstring result;
     if (!text || length <= 0) return result;
     result.reserve(length);
-    // Reserved 0xFF is a Fallout UI bullet, not a CP949 lead byte.
-    if (static_cast<BYTE>(text[0]) == 0xff) {
+    // Legacy 0xFF and vanilla 0x95 are distinct Fallout UI markers.
+    if (uiKnobPrefix(text, length)) {
+        result.push_back(L'\x2022'); // CP1252 0x95 = bullet
+        ++text;
+        --length;
+    } else if (static_cast<BYTE>(text[0]) == 0xff) {
         result.push_back(L'\x25cf');
         ++text;
         --length;
@@ -129,7 +147,8 @@ bool splitText(const char* text, short* starts, short* count, int maxWidth) {
         int end = start, lastSpace = -1;
         while (end < length) {
             if (text[end] == '\n' || text[end] == '\r') break;
-            int charSize = nextBytes(text + end, length - end);
+            int charSize = end == 0 && uiKnobPrefix(text, length)
+                               ? 1 : nextBytes(text + end, length - end);
             if (measuredWidth(text + start, end + charSize - start) > maxWidth) break;
             if (text[end] == ' ') lastSpace = end;
             end += charSize;
@@ -147,6 +166,10 @@ bool splitText(const char* text, short* starts, short* count, int maxWidth) {
     return true;
 }
 } // namespace
+
+extern "C" __declspec(dllexport) int __cdecl IsGameUiKnobPrefix(const char* text, int length) {
+    return uiKnobPrefix(text, length) ? 1 : 0;
+}
 
 extern "C" void __cdecl InitFont() {
     if (initialized) return;
