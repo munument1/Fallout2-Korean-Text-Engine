@@ -65,6 +65,23 @@ class ExtraCRCEditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid"):
             ensure_sfall_crc("[Debugging]\n", "wrong")
 
+    def test_extended_sfall_decimal_exe_sizes_preserved_with_strict_validation(self):
+        ini = ('[Main]\n[Debugging]\n'
+               'ExtraCRC=0xf250cb75,1189888,1483776,0x122800,0x16a400\n'
+               'SkipSizeCheck=1\n')
+        result = ensure_sfall_crc(ini, KOREAN_CRC, allowed_size_tokens=(1189888, 1483776))
+        self.assertIn('ExtraCRC=0xf250cb75,1189888,1483776,0x122800,0x16a400,0xFCDC75E0\n', result)
+        self.assertEqual(ensure_sfall_crc(result, KOREAN_CRC,
+                                          allowed_size_tokens=(1189888, 1483776)), result)
+        with self.assertRaisesRegex(ValueError, 'Unrecognized'):
+            ensure_sfall_crc(ini, KOREAN_CRC)
+        with self.assertRaisesRegex(ValueError, 'Unrecognized'):
+            ensure_sfall_crc(ini.replace('SkipSizeCheck=1', 'SkipSizeCheck=0'),
+                             KOREAN_CRC, allowed_size_tokens=(1189888, 1483776))
+        with self.assertRaisesRegex(ValueError, 'Unrecognized'):
+            ensure_sfall_crc(ini.replace('1189888', '1189889'),
+                             KOREAN_CRC, allowed_size_tokens=(1189888, 1483776))
+
     def test_no_change_if_already_registered(self):
         ini = "[Debugging]\nExtraCRC=0xE620CEBA,0xfcdc75e0\n"
         self.assertEqual(ensure_sfall_crc(ini, KOREAN_CRC), ini)

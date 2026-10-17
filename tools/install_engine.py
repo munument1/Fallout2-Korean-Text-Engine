@@ -17,6 +17,129 @@ else:
 ROOT = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
 STEAM = Path(r'C:\Games\Steam\steamapps\common\Fallout 2').resolve()
 BACKUP = 'korean_engine_backup_v2'
+RESURRECTION_LEGACY_PATCH = (
+    'https://github.com/munument1/Fallout-1.5-Resurrection-KR/'
+    'releases/tag/Resurrection-V1.5-KR1.1'
+)
+
+
+def is_legacy_resurrection(target):
+    """Identify the archive 1.5 game with its distinct launcher and engine.
+
+    The historical Korean patch uses a legacy sfall renderer that should stay
+    together with its own executable and high-resolution patch settings.
+    An extensionless PE alone is not enough: other compatible games may use it.
+    """
+    root = Path(target)
+    return all((root / name).is_file() and not (root / name).is_symlink()
+               for name in ('fores.exe', 'fores.cfg', 'FALLOUT2'))
+
+
+def detect_native_executables(target):
+    """Find compatible Watcom PE game images, even when they have no extension.
+
+    Only .exe and extensionless PE candidates with the classic Watcom BEGTEXT
+    section enter the native
+    validator. A changed engine ABI is an error, not permission to patch just
+    the other launcher and leave a partly translated installation.
+    """
+    if is_legacy_resurrection(target):
+        raise ValueError('Fallout 1.5 Resurrection: 기존 한국어 패치 KR1.1을 사용하세요. '
+                         '구형 sfall 및 고해상도 설정의 호환성 문제로 새 독립형 '
+                         '설치기에서 제외했습니다. 기존 게임 파일은 변경하지 않습니다. '
+                         '다운로드: ' + RESURRECTION_LEGACY_PATCH)
+    try:
+        from .native_pe import inspect_native_exe
+    except ImportError:
+        from native_pe import inspect_native_exe
+    candidates = {}
+    for path in sorted(Path(target).iterdir(), key=lambda item: item.name.casefold()):
+        if path.suffix.casefold() not in ('.exe', '') or not path.is_file():
+            continue
+        if path.is_symlink():
+            raise ValueError('Symlinked executable is unsupported: ' + path.name)
+        if not 100_000 <= path.stat().st_size <= 20_000_000:
+            continue
+        raw = path.read_bytes()
+        try:
+            pe = pefile.PE(data=raw, fast_load=True)
+        except pefile.PEFormatError:
+            continue
+        if not pe.sections or pe.sections[0].Name.rstrip(b'\0') != b'BEGTEXT':
+            continue
+        try:
+            inspect_native_exe(raw)
+        except ValueError as exc:
+            raise ValueError(f'Incompatible game executable {path.name}: {exc}') from exc
+        candidates[path.name] = raw
+    if not candidates:
+        raise ValueError('No compatible Fallout 2 Watcom EXE found. New engine ABIs need separate analysis.')
+    return candidates
+
+
+def detect_native_config(target, executable_names):
+    """Determine the INI used by the game from existing files, not a mod name."""
+    configs = {path.name.casefold(): path.name
+               for path in Path(target).iterdir()
+               if path.is_file() and path.suffix.casefold() == '.cfg' and not path.is_symlink()}
+    choices = []
+    for name in executable_names:
+        stem = Path(name).stem
+        if stem.casefold().endswith(('hr', 'hd')):
+            stem = stem[:-2]
+        candidate = configs.get((stem + '.cfg').casefold())
+        if candidate and candidate not in choices:
+            choices.append(candidate)
+    if len(choices) > 1:
+        # Extended sfall mods can bundle a vanilla fallout2.exe/.cfg alongside
+        # their own launcher/CFG. Respect the *active* sfall ConfigFile instead
+        # of guessing from a folder or game name. Reject missing/unsafe hints.
+        ini = Path(target) / 'ddraw.ini'
+        if ini.is_file() and not ini.is_symlink():
+            text, _ = decode_ini(ini.read_bytes())
+            hints = []
+            active = False
+            for line in text.splitlines():
+                clean = line.strip()
+                if not clean or clean.startswith((';', '#')):
+                    continue
+                if clean.startswith('['):
+                    active = clean.casefold() == '[misc]'
+                elif active and '=' in clean:
+                    key, value = clean.split('=', 1)
+                    if key.strip().casefold() == 'configfile':
+                        hints.append(value.split(';', 1)[0].strip())
+            if len(hints) == 1:
+                import re
+                hint = hints[0]
+                if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\.cfg', hint, re.I):
+                    match = configs.get(hint.casefold())
+                    if match in choices:
+                        return match
+        raise ValueError('Multiple game configurations found without one verified sfall ConfigFile.')
+    if choices:
+        return choices[0]
+    # Some Fallout 2 total conversions use an extensionless game PE and an
+    # independent launcher. The game CFG then has the launcher's stem, not
+    # the PE's name. One existing CFG is unambiguous without a game profile.
+    if len(configs) == 1:
+        return next(iter(configs.values()))
+    if 'fallout2.cfg' in configs:
+        return configs['fallout2.cfg']
+    raise ValueError('Unable to locate the game text configuration for compatible EXE(s).')
+
+
+def has_native_korean_text(target):
+    """An engine hook does not imply Korean MSG files are installed.
+
+    Forcing language=korean without the required game MSG tree can prevent
+    some modded games from launching. Preserve their selected language until
+    users separately install actual translated text files.
+    """
+    directory = checked_destination(target, 'data/text/korean')
+    if not directory.is_dir():
+        return False
+    return any(directory.glob('game/*.msg')) or any(directory.glob('dialog/*.msg'))
 
 
 def validate_target(target):
@@ -35,11 +158,22 @@ def validate_target(target):
 def atomic(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.korean-tmp')
-    with temporary.open('xb') as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
+    created = False
+    try:
+        with temporary.open('xb') as handle:
+            created = True
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        # A failed write or rename must not block the next install attempt.
+        # Never remove a temporary file that already existed before this call.
+        if created:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def checked_destination(target, name):
@@ -55,35 +189,70 @@ def checked_destination(target, name):
 
 
 def restore(target, dry_run):
+    import re
     backup = target / BACKUP
+    if backup.is_symlink() or not backup.is_dir():
+        raise ValueError('No valid Korean engine backup directory found.')
     state = json.loads((backup / 'manifest.json').read_text(encoding='utf-8'))
     if set(state['before']) != set(state['after']):
         raise ValueError('Invalid recovery manifest.')
-    allowed = {'fallout2.exe', 'Fallout2.exe', 'fallout2HR.exe', 'FSonoraDLC.exe', 'Nevada.exe', 'olympus.exe', 'FALLOUT2',
+    allowed = {'fallout2.exe', 'Fallout2.exe', 'fallout2HR.exe', 'FSonoraDLC.exe', 'FSonora.exe', 'Nevada.exe', 'NevadaHD.exe', 'olympus.exe', 'FALLOUT2',
                'fallout2.cfg', 'Fallout2.cfg', 'Nevada.cfg', 'olympus.cfg', 'fores.cfg', 'ddraw.ini', 'f2_res.ini',
                'f2_res.dll', 'fallout2font.dll', 'fallout2font_legacy.dll', 'fallout2font.ini',
                'fonts/Galmuri9.ttf', 'fonts/Galmuri11.ttf', 'fonts/Galmuri-LICENSE.txt'}
-    if not set(state['before']) <= allowed:
-        raise ValueError('Unexpected recovery path.')
+    # Native auto-detection also supports future mod EXE/CFG filenames.
+    # Keep path characters tightly constrained, disallow nested directories
+    # and verify the backed-up original against the genuine Watcom ABI below.
+    dynamic = {name for name in state['before'] if name not in allowed}
+    for name in dynamic:
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\.(?:exe|cfg)', name, flags=re.I):
+            raise ValueError('Unexpected recovery path: ' + name)
+    cfg_merges = {}
     for name, expected in state['after'].items():
         path = checked_destination(target, name)
-        if not path.is_file() or sha(path.read_bytes()) != expected:
+        if not path.is_file():
             raise ValueError(f'Installed file changed; manual recovery needed: {name}')
         previous = state['before'][name]
         if previous is not None and sha((backup / name).read_bytes()) != previous:
             raise ValueError('Recovery file hash mismatch.')
+        if name in dynamic and name.lower().endswith('.exe'):
+            try:
+                from .native_pe import inspect_native_exe
+            except ImportError:
+                from native_pe import inspect_native_exe
+            inspect_native_exe((backup / name).read_bytes())
+        if sha(path.read_bytes()) != expected:
+            # Fallout itself updates its CFG during normal gameplay. If the
+            # installer only changed language=en -> ko, undo only that setting
+            # while preserving the user's intervening gameplay settings.
+            if name.lower().endswith('.cfg') and previous is not None:
+                old_text, old_encoding = decode_ini((backup / name).read_bytes())
+                original_lang = read_ini_option(old_text, 'system', 'language')
+                installed_cfg = put_ini(old_text, 'system', 'language', 'korean').encode(old_encoding)
+                if original_lang is not None and sha(installed_cfg) == expected:
+                    current_text, current_encoding = decode_ini(path.read_bytes())
+                    if read_ini_option(current_text, 'system', 'language') == 'korean':
+                        current_text = put_ini(current_text, 'system', 'language', original_lang)
+                    cfg_merges[name] = current_text.encode(current_encoding)
+                    continue
+            raise ValueError(f'Installed file changed; manual recovery needed: {name}')
+    # Preserve every prior recovery record. A user may install, restore, and
+    # install again; the previous archive must never block a later restore or
+    # be overwritten. Treat dangling symlinks as occupied names as well.
     archived = target / (BACKUP + '_restored')
-    if archived.exists():
-        raise ValueError('Prior restored backup exists.')
+    suffix = 2
+    while archived.exists() or archived.is_symlink():
+        archived = target / f'{BACKUP}_restored_{suffix}'
+        suffix += 1
     if not dry_run:
         for name, expected in state['before'].items():
             path = checked_destination(target, name)
             if expected is None:
                 path.unlink()
             else:
-                atomic(path, (backup / name).read_bytes())
+                atomic(path, cfg_merges.get(name, (backup / name).read_bytes()))
         backup.rename(archived)
-    return {'operation': 'restore', 'dry_run': dry_run}
+    return {'operation': 'restore', 'dry_run': dry_run, 'archived_backup': archived.name}
 
 
 def read_ini_option(text, section, key):
@@ -103,11 +272,14 @@ def read_ini_option(text, section, key):
 
 
 
-def ensure_sfall_crc(text, crc):
+def ensure_sfall_crc(text, crc, allowed_size_tokens=()):
     """Register a single CJK-compatible EXE CRC without rewriting other INI data.
 
     Preserve whitespace, line endings, existing entries, comments and BOM.
-    Refuse ambiguous duplicate [Debugging] / ExtraCRC entries.
+    Refuse ambiguous duplicate [Debugging] / ExtraCRC entries. Some extended
+    sfall mods also list the *original* EXE byte lengths as decimal tokens;
+    preserve only lengths verified against detected compatible EXEs when the
+    existing INI explicitly enables SkipSizeCheck.
     """
     import re
 
@@ -146,9 +318,13 @@ def ensure_sfall_crc(text, crc):
             raise ValueError('Malformed sfall ExtraCRC entry.')
         current = match.group(2)
         tokens = [item.strip() for item in current.split(',') if item.strip()]
-        if any(not re.fullmatch(r'0[xX][0-9a-fA-F]{1,8}', item) for item in tokens):
+        sizes = {str(size) for size in allowed_size_tokens}
+        allow_sizes = (read_ini_option(text, 'Debugging', 'SkipSizeCheck') == '1')
+        if any(not re.fullmatch(r'0[xX][0-9a-fA-F]{1,8}', item) and
+               not (allow_sizes and item in sizes) for item in tokens):
             raise ValueError('Unrecognized existing sfall ExtraCRC entry; refusing to edit.')
-        if any(int(item, 16) == int(crc, 16) for item in tokens):
+        if any(item.lower().startswith('0x') and int(item, 16) == int(crc, 16)
+               for item in tokens):
             return text
         value = current.rstrip()
         trailing = current[len(value):]
@@ -208,8 +384,180 @@ def inspect_sfall(target, manifest):
     return {'enabled': True, 'status': 'existing-unverified', 'hash': digest}
 
 
+def install_native(args, target, manifest):
+    """Profile-free, reversible installation for structurally compatible 1.02d engines."""
+    try:
+        from .native_pe import native_exe
+    except ImportError:
+        from native_pe import native_exe
+    if getattr(args, 'cjk_exe', None) or getattr(args, 'legacy_font', None):
+        raise ValueError('Independent native mode cannot accept third-party CJK files.')
+    standalone = getattr(args, 'standalone_font', None)
+    if not standalone:
+        raise ValueError('Independent native mode requires the native font DLL.')
+    font = Path(standalone).read_bytes()
+    pe = pefile.PE(data=font)
+    if pe.FILE_HEADER.Machine != 0x14c or not (pe.FILE_HEADER.Characteristics & 0x2000):
+        raise ValueError('Expected 32-bit native Korean DLL.')
+    exports = {symbol.name.decode('ascii') for symbol in pe.DIRECTORY_ENTRY_EXPORT.symbols if symbol.name}
+    required = {'InitKoreanEngine', 'InitFont', 'ClearFont', 'SelectFont',
+                'GetTextWidth', 'GetTextHeight', 'TextOutput', 'TextOutputL',
+                'TextOutputX', 'SplitText'}
+    if not required <= exports or b'fallout2font_legacy.dll' in font:
+        raise ValueError('Invalid independent Korean font DLL exports.')
+    original_exes = detect_native_executables(target)
+    config_name = detect_native_config(target, original_exes.keys())
+    payload = {name: native_exe(content) for name, content in original_exes.items()}
+    for name, expected in manifest['assets'].items():
+        data = (ROOT / name).read_bytes()
+        if sha(data) != expected:
+            raise ValueError('Bundled runtime asset hash mismatch: ' + name)
+        payload[name] = data
+    payload['fallout2font.dll'] = font
+    sfall = inspect_sfall(target, manifest)
+    sfall_path = checked_destination(target, 'ddraw.dll')
+    sfall_hash = sfall['hash']
+    crcs = []
+    if sfall['enabled']:
+        ini_path = checked_destination(target, 'ddraw.ini')
+        current_ini = ini_path.read_bytes()
+        text, encoding = decode_ini(current_ini)
+        updated = text
+        for name in original_exes:
+            crc = f'0x{sfall_crc(payload[name], manifest["crc_table"]):08X}'
+            if crc not in crcs:
+                crcs.append(crc)
+                updated = ensure_sfall_crc(updated, crc,
+                                           allowed_size_tokens=(len(data) for data in original_exes.values()))
+        if updated.encode(encoding) != current_ini:
+            payload['ddraw.ini'] = updated.encode(encoding)
+    cfg_path = checked_destination(target, config_name)
+    config_original = cfg_path.read_bytes()
+    text, encoding = decode_ini(config_original)
+    has_translation = has_native_korean_text(target)
+    if has_translation:
+        updated_cfg = put_ini(text, 'system', 'language', 'korean').encode(encoding)
+        if updated_cfg != cfg_path.read_bytes():
+            payload[config_name] = updated_cfg
+    backup = Path(target) / BACKUP
+    if backup.exists() or backup.is_symlink():
+        raise ValueError('Existing Korean engine backup found; restore before reinstalling.')
+    for name in payload:
+        path = checked_destination(target, name)
+        if path.with_name(path.name + '.korean-tmp').exists():
+            raise ValueError('Unfinished temporary installation found: ' + name)
+    report = {
+        'operation': 'install', 'profile': 'automatic-structural', 'renderer': 'native-no-cjk',
+        'dry_run': args.dry_run, 'executables': sorted(original_exes),
+        'config': config_name, 'sfall_status': sfall['status'], 'sfall_unchanged': True,
+        'korean_translation_detected': has_translation,
+        'sfall_ini_modified': 'ddraw.ini' in payload,
+        'sfall_crc_added': 'ddraw.ini' in payload and bool(crcs),
+        'exe_crcs': crcs, 'files': sorted(payload),
+    }
+    if args.dry_run:
+        return report
+
+    # Snapshot every source before writing. Updates racing with the scan must
+    # not be overwritten by a patch derived from earlier executable bytes.
+    source_bytes = {}
+    for name in payload:
+        path = checked_destination(target, name)
+        source_bytes[name] = path.read_bytes() if path.exists() else None
+        if name in original_exes and source_bytes[name] != original_exes[name]:
+            raise ValueError('Game executable changed during compatibility inspection: ' + name)
+    if 'ddraw.ini' in payload and source_bytes['ddraw.ini'] != current_ini:
+        raise ValueError('sfall configuration changed during compatibility inspection.')
+    if config_name in payload and source_bytes[config_name] != config_original:
+        raise ValueError('Game configuration changed during compatibility inspection.')
+    if sfall['enabled'] and sha(sfall_path.read_bytes()) != sfall_hash:
+        raise ValueError('Existing sfall DLL changed during compatibility inspection.')
+
+    state = {'before': {name: sha(data) if data is not None else None
+                        for name, data in source_bytes.items()},
+             'after': {name: sha(data) for name, data in payload.items()}}
+    # Prepare a complete backup in a staging directory. An interrupted copy
+    # cannot leave a backup named as if a valid installation were underway.
+    staging = Path(tempfile.mkdtemp(prefix=BACKUP + '-staging-', dir=target))
+    try:
+        for name, previous in source_bytes.items():
+            if previous is None:
+                continue
+            destination = staging / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(checked_destination(target, name), destination)
+            if destination.read_bytes() != previous:
+                raise ValueError('Game file changed while preparing its backup: ' + name)
+        (staging / 'manifest.json').write_text(json.dumps(state, indent=2), encoding='utf-8')
+        for name, previous in source_bytes.items():
+            path = checked_destination(target, name)
+            if (path.read_bytes() if path.exists() else None) != previous:
+                raise ValueError('Game file changed while preparing its backup: ' + name)
+        if sfall['enabled'] and sha(sfall_path.read_bytes()) != sfall_hash:
+            raise ValueError('Existing sfall DLL changed while preparing its backup.')
+        staging.rename(backup)
+    except Exception:
+        if staging.exists():
+            shutil.rmtree(staging)
+        raise
+
+    touched = []
+    try:
+        for name, data in payload.items():
+            atomic(checked_destination(target, name), data)
+            touched.append(name)
+        if sfall['enabled'] and sha(sfall_path.read_bytes()) != sfall_hash:
+            raise ValueError('Existing sfall DLL changed during installation.')
+    except Exception as error:
+        rollback_errors = []
+        for name in reversed(touched):
+            path = checked_destination(target, name)
+            try:
+                if state['before'][name] is None:
+                    path.unlink()
+                else:
+                    atomic(path, (backup / name).read_bytes())
+            except Exception as rollback_error:
+                rollback_errors.append(f'{name}: {rollback_error}')
+        if rollback_errors:
+            raise RuntimeError('Installation failed and recovery is incomplete. '
+                               'Keep the backup for manual recovery: ' +
+                               '; '.join(rollback_errors)) from error
+        shutil.rmtree(backup)
+        raise
+    return report
+    backup.mkdir()
+    state = {'before': {}, 'after': {name: sha(data) for name, data in payload.items()}}
+    for name in payload:
+        path = checked_destination(target, name)
+        state['before'][name] = sha(path.read_bytes()) if path.exists() else None
+        if path.exists():
+            destination = backup / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, destination)
+    (backup / 'manifest.json').write_text(json.dumps(state, indent=2), encoding='utf-8')
+    touched = []
+    try:
+        for name, data in payload.items():
+            atomic(checked_destination(target, name), data)
+            touched.append(name)
+        if sfall['enabled'] and sha(sfall_path.read_bytes()) != sfall_hash:
+            raise ValueError('Existing sfall DLL changed during installation.')
+    except Exception:
+        for name in reversed(touched):
+            path = checked_destination(target, name)
+            if state['before'][name] is None:
+                path.unlink()
+            else:
+                atomic(path, (backup / name).read_bytes())
+        raise
+    return report
+
+
 def install(args, target):
     manifest = json.loads((ROOT / 'runtime-manifest.json').read_text(encoding='utf-8'))
+    if bool(getattr(args, 'native_exe', False)):
+        return install_native(args, target, manifest)
     if args.profile not in manifest['profiles']:
         raise ValueError('No verified executable profile for this mod.')
     profile = manifest['profiles'][args.profile]
@@ -407,7 +755,7 @@ def main():
     parser.add_argument('--standalone-font', type=Path,
                         help='Experiment only: independently compiled font DLL; no Chinese legacy font DLL')
     parser.add_argument('--native-exe', action='store_true',
-                        help='EXPERIMENT: patch exact stock US 1.02d from scratch, no CJK binary or download')
+                        help='EXPERIMENT: structurally detect compatible Fallout 2 Watcom EXEs, no CJK binaries')
     parser.add_argument('--auto-cjk-exe', action='store_true',
                         help='Explicit opt-in: temporarily download a hash-pinned upstream CJK EXE')
     parser.add_argument('--base-exe', type=Path)
@@ -422,13 +770,13 @@ def main():
         if args.restore:
             result = restore(target, args.dry_run)
         else:
-            if not args.profile or (not args.legacy_font and not args.standalone_font):
-                parser.error('--profile and exactly one font DLL mode are required')
+            if (not args.profile and not args.native_exe) or (not args.legacy_font and not args.standalone_font):
+                parser.error('Choose exactly one font DLL mode; legacy installs also need a profile')
             if args.legacy_font and args.standalone_font:
                 parser.error('Choose --legacy-font OR --standalone-font, not both')
             if args.native_exe and (args.cjk_exe or args.auto_cjk_exe or args.legacy_font or
-                                    args.profile not in ('stock', 'rpu') or not args.standalone_font):
-                parser.error('--native-exe supports verified stock/RPU with --standalone-font only, without CJK inputs')
+                                    not args.standalone_font):
+                parser.error('--native-exe needs --standalone-font; no profile or CJK inputs required')
             if args.auto_cjk_exe and args.cjk_exe:
                 parser.error('Use --auto-cjk-exe OR --cjk-exe, not both')
             if args.native_exe:

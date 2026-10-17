@@ -7,7 +7,7 @@ import unittest
 
 import pefile
 from tools.native_pe import (
-    _startup_stub, native_exe, HOOK_VA, BOOT_VA,
+    _startup_stub, native_exe, inspect_native_exe, HOOK_VA, BOOT_VA,
     IAT_GETPROCADDRESS, IAT_LOADLIBRARYA, STOCK_SHA256, RPU_HRP_SHA256,
 )
 from tools.runtime import sfall_crc
@@ -27,7 +27,7 @@ class NativePEUnitTests(unittest.TestCase):
 
     def test_non_stock_input_rejected(self):
         for raw in (b"", b"MZ" + b"\0" * 4096, b"not executable"):
-            with self.subTest(size=len(raw)), self.assertRaisesRegex(ValueError, "only verified stock"):
+            with self.subTest(size=len(raw)), self.assertRaises(ValueError):
                 native_exe(raw)
 
 
@@ -46,8 +46,23 @@ class NativePEOwnerInputTests(unittest.TestCase):
         self.assertEqual(patch1[pe.get_offset_from_rva(HOOK_VA - 0x400000):][:5],
                          b"\xe9" + struct.pack("<i", BOOT_VA - (HOOK_VA + 5)))
         self.assertNotEqual(src, patch1)
-        with self.assertRaisesRegex(ValueError, "only verified stock"):
+        with self.assertRaises(ValueError):
             native_exe(patch1)
+
+    def test_future_non_abi_update_is_accepted_without_registering_sha(self):
+        original = Path(os.environ["KOREAN_ENGINE_STOCK_EXE"]).read_bytes()
+        candidate = bytearray(original)
+        candidate[0x51994] ^= 1  # unrelated gameplay code, no ABI hook touched
+        self.assertNotEqual(hashlib.sha256(candidate).hexdigest(), STOCK_SHA256)
+        compiled = native_exe(bytes(candidate))
+        self.assertEqual(compiled[0x51994], candidate[0x51994])
+        self.assertEqual(inspect_native_exe(bytes(candidate))["boot_va"], BOOT_VA)
+
+    def test_future_changed_font_abi_is_rejected(self):
+        original = bytearray(Path(os.environ["KOREAN_ENGINE_STOCK_EXE"]).read_bytes())
+        original[0x32580] ^= 1
+        with self.assertRaisesRegex(ValueError, "engine ABI differs"):
+            native_exe(bytes(original))
 
 
 @unittest.skipUnless(os.environ.get("KOREAN_ENGINE_RPU_EXE"), "Owner HRP-patched EXE unavailable")
@@ -64,8 +79,22 @@ class NativePERpuOwnerInputTests(unittest.TestCase):
         self.assertEqual(pe.FILE_HEADER.NumberOfSections, 7)
         self.assertIn(b"f2_res.dll", dst[:len(src)])
         self.assertIn(b"fallout2font.dll", dst)
-        with self.assertRaisesRegex(ValueError, "only verified"):
+        with self.assertRaises(ValueError):
             native_exe(dst)
+
+
+@unittest.skipUnless(os.environ.get("KOREAN_ENGINE_NEVADA_EXE"), "Owner Nevada EXE unavailable")
+class NativePENevadaInputTests(unittest.TestCase):
+    def test_larger_resources_move_native_loader_without_overwriting_mod(self):
+        raw = Path(os.environ["KOREAN_ENGINE_NEVADA_EXE"]).read_bytes()
+        layout = inspect_native_exe(raw)
+        self.assertGreater(layout["boot_va"], BOOT_VA)
+        result = native_exe(raw)
+        pe = pefile.PE(data=result)
+        self.assertEqual(pe.sections[-1].VirtualAddress, layout["virt"])
+        self.assertEqual(pe.OPTIONAL_HEADER.SizeOfImage, layout["virt"] + 0x10000)
+        self.assertEqual(result[0x11FE00:len(raw)], raw[0x11FE00:])
+        self.assertEqual(result[0xACAF0:0xACBB0], raw[0xACAF0:0xACBB0])
 
 
 if __name__ == "__main__":

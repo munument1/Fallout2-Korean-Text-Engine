@@ -93,10 +93,23 @@ bool inGame() {
     auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image);
     if (dos->e_lfanew <= 0 || dos->e_lfanew > 1024) return false;
     auto* pe = reinterpret_cast<const IMAGE_NT_HEADERS32*>(image + dos->e_lfanew);
-    // The native .krinit section must exist and the boot hook be signed.
-    if (pe->Signature != IMAGE_NT_SIGNATURE || pe->OptionalHeader.SizeOfImage < 0x300000)
+    // On compatible Fallout 2 variants the enlarged .rsrc section moves our
+    // independent loader. Verify the hook targets the actual .krinit section
+    // instead of relying on the old fixed sfall/CJK jump displacement.
+    if (pe->Signature != IMAGE_NT_SIGNATURE || pe->OptionalHeader.SizeOfImage < 0x300000 ||
+        pe->FileHeader.NumberOfSections != 7)
         return false;
-    return *reinterpret_cast<const DWORD*>(0x4CAF23) == 0x00225559;
+    const auto* sections = IMAGE_FIRST_SECTION(pe);
+    const auto& nativeSection = sections[6];
+    if (std::memcmp(nativeSection.Name, ".krinit", 7) != 0 ||
+        nativeSection.Misc.VirtualSize != 0x1000 ||
+        nativeSection.SizeOfRawData != 0x1000 ||
+        *reinterpret_cast<const BYTE*>(0x4CAF22) != 0xE9)
+        return false;
+    const int32_t displacement = *reinterpret_cast<const int32_t*>(0x4CAF23);
+    const uintptr_t target = 0x4CAF27 + displacement;
+    return target == kGameBase + nativeSection.VirtualAddress + 0x480 &&
+           *reinterpret_cast<const WORD*>(target) == 0x609c;
 }
 
 bool writeManager(FontManager* manager, FontManager const& replacement) {

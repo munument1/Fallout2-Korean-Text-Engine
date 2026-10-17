@@ -184,7 +184,7 @@ class Installer(tk.Tk):
 
         ttk.Label(outer, text="Fallout 2 한국어 출력 엔진",
                   font=("Malgun Gothic", 17, "bold")).pack(anchor="w")
-        ttk.Label(outer, text=("독립형 시험판: 순정 Fallout 2 폴더 하나만 선택하세요."
+        ttk.Label(outer, text=("독립형 공개 베타: Fallout 2 계열 게임/모드 폴더 하나만 선택하세요."
                                if self.native_mode else
                                "시험판: 게임 폴더만 선택 → 확인 후 설치. 기존 파일 자동 백업."
                                if self.experimental else
@@ -205,7 +205,7 @@ class Installer(tk.Tk):
 
         if self.native_mode:
             ttk.Label(outer,
-                      text="순정 US 1.02d / 검증된 RPU 고해상도 패치 EXE를 자동 인식합니다. 게임 종류 선택 및 CJK 파일 불필요.",
+                      text="호환되는 Fallout 2 Watcom 실행 파일을 내부 구조로 자동 검사합니다. 게임 종류 선택이나 중국어 CJK 파일이 필요 없습니다.",
                       foreground="#555", wraplength=670).pack(anchor="w", pady=(2, 8))
         elif self.experimental:
             ttk.Label(outer, text="독립형 글꼴 렌더러 시험판: 기존 CJK DLL은 사용하지 않습니다.",
@@ -226,8 +226,9 @@ class Installer(tk.Tk):
             ttk.Label(outer, textvariable=self.cjk_summary, wraplength=670,
                       foreground="#555").pack(anchor="w", pady=(3, 8))
 
-        ttk.Checkbutton(outer, text="고급 설정 (추가 원본 EXE · 메뉴 설정)",
-                        variable=self.advanced, command=self._toggle_advanced).pack(anchor="w")
+        if not self.native_mode:
+            ttk.Checkbutton(outer, text="고급 설정 (추가 원본 EXE · 메뉴 설정)",
+                            variable=self.advanced, command=self._toggle_advanced).pack(anchor="w")
         self.advanced_frame = ttk.Frame(outer)
         if not self.native_mode:
             self._file_row(self.advanced_frame, "원본 Fallout 2 US 1.02d EXE (일부 모드에서 필요)", self.base)
@@ -311,16 +312,13 @@ class Installer(tk.Tk):
         try:
             path = engine.validate_target(path)
             if self.native_mode:
-                profile = detect_native_profile(path)
-                if profile:
-                    self.profile_title.set(PROFILE_TITLES[profile])
-                    digest = sha((path / "fallout2.exe").read_bytes())
-                    extra = " (기존 고해상도 패치 보존)" if digest == RPU_HRP_SHA256 else ""
-                    self.summary.set("자동 판별: " + PROFILE_TITLES[profile] + extra)
-                elif (path / engine.BACKUP / "manifest.json").is_file():
-                    self.summary.set("이미 설치된 폴더입니다. 기존 설치기를 이용해 복구하세요.")
+                if (path / engine.BACKUP / "manifest.json").is_file():
+                    self.summary.set("이미 설치된 폴더입니다. 아래 '설치 전 상태로 복구' 버튼을 이용하세요.")
                 else:
-                    self.summary.set("아직 검증되지 않은 EXE입니다. 지원 대상: 순정 US 1.02d 또는 검증된 RPU 고해상도 패치 EXE.")
+                    executables = engine.detect_native_executables(path)
+                    config = engine.detect_native_config(path, executables.keys())
+                    self.summary.set("자동 호환성 검사 통과: " + ", ".join(executables) +
+                                     " / 설정: " + config)
                 return
             matches = detect_profiles(path, self.manifest)
             self.combo.configure(values=[PROFILE_TITLES[key] for key in matches])
@@ -357,9 +355,9 @@ class Installer(tk.Tk):
             raise ValueError("게임 폴더를 선택하세요.")
         target = engine.validate_target(Path(self.target.get()))
         if self.native_mode:
-            profile = detect_native_profile(target)
-            if not profile:
-                raise ValueError("지원되지 않는 실행 파일입니다. 순정 US 1.02d 또는 검증된 RPU 고해상도 패치 버전만 자동 설치할 수 있습니다.")
+            executables = engine.detect_native_executables(target)
+            engine.detect_native_config(target, executables.keys())
+            profile = None
         else:
             profile = PROFILE_BY_TITLE.get(self.profile_title.get())
             if not profile or profile not in detect_profiles(target, self.manifest):
@@ -391,9 +389,10 @@ class Installer(tk.Tk):
         # ExtraCRC is managed automatically; advanced settings cover mod-specific HRP fixes.
         engine.inspect_sfall(target, self.manifest)
 
-        profile_spec = self.manifest["profiles"][profile]
-        game_exe = target / profile_spec["exe"]
         stock = None
+        if not self.native_mode:
+            profile_spec = self.manifest["profiles"][profile]
+            game_exe = target / profile_spec["exe"]
         if not self.native_mode and sha(game_exe.read_bytes()) != self.manifest["stock_sha256"]:
             stock = Path(self.base.get()) if self.base.get() else suggest_stock_exe(target, self.manifest)
             if stock is None:
@@ -409,8 +408,7 @@ class Installer(tk.Tk):
             profile=profile, cjk_exe=cjk_exe, legacy_font=legacy,
             standalone_font=standalone,
             native_exe=self.native_mode,
-            base_exe=stock, keep_menu_settings=(self.keep_menu.get() or
-                                               (self.native_mode and profile == "rpu")),
+            base_exe=stock, keep_menu_settings=(self.keep_menu.get() or self.native_mode),
             configure_sfall=self.configure_sfall.get(), dry_run=dry_run)
 
     def _install(self):
@@ -453,9 +451,19 @@ class Installer(tk.Tk):
             arguments.dry_run = False
             outcome = engine.install(arguments, target)
             self._append("설치 완료: " + json.dumps(outcome, ensure_ascii=False))
-            messagebox.showinfo("설치 완료",
-                "한국어 출력 엔진을 설치했습니다.\n"
-                "이제 해당 게임의 한국어 번역 패치를 적용하세요.", parent=self)
+            if self.native_mode and not outcome.get("korean_translation_detected"):
+                completion = (
+                    "한국어 출력 엔진을 설치했습니다.\n"
+                    "현재 한국어 MSG 번역이 감지되지 않아 언어 설정은 유지했습니다.\n"
+                    "한국어 번역 ZIP을 적용한 뒤 엔진을 복구하고 다시 설치하면 "
+                    "한국어 언어 설정이 자동 반영됩니다."
+                )
+            else:
+                completion = (
+                    "한국어 출력 엔진을 설치했습니다.\n"
+                    "별도로 적용한 한국어 번역문을 게임에서 확인하세요."
+                )
+            messagebox.showinfo("설치 완료", completion, parent=self)
             self.summary.set("설치 완료 · 필요하면 복구 버튼으로 원상 복구할 수 있습니다.")
 
     def _restore(self):
@@ -476,13 +484,16 @@ class Installer(tk.Tk):
 
     def _help(self):
         if self.native_mode:
-            messagebox.showinfo("순정 EXE 독립형 한글 엔진 시험판",
-                "① Fallout 2 US 1.02d를 새 폴더에 복사합니다.\n"
-                "② 복사본 폴더만 선택하세요. 중국어 CJK 파일/다운로드는 필요 없습니다.\n"
-                "③ 우리 자체 EXE 훅과 한글 DLL을 설치하고 파일을 백업합니다.\n"
-                "④ 공식 sfall이 있다면 ExtraCRC를 자동 등록합니다.\n"
-                "⑤ 메뉴, 캐릭터 생성, 대화, 인벤토리, 전투, 저장/불러오기를 확인하세요.\n\n"
-                "RPU/Et Tu 전용 EXE는 아직 미지원입니다. 테스트용 복사본만 사용하세요.",
+            messagebox.showinfo("Fallout 2 범용 독립형 한국어 엔진 베타",
+                "① Fallout 2 계열 게임 또는 모드를 별도 폴더에 백업합니다.\n"
+                "② 게임 폴더만 지정하세요. 게임 종류 선택이나 중국어 CJK 파일은 필요 없습니다.\n"
+                "③ 호환 Watcom EXE를 구조 검사한 뒤 원본을 백업하고 한국어 로더를 설치합니다.\n"
+                "④ 기존 sfall이 있다면 모드 설정을 유지하면서 필요한 ExtraCRC만 등록합니다.\n"
+                "⑤ 별도 번역 MSG가 없는 게임은 현재 언어 설정을 유지합니다.\n"
+                "⑥ 메뉴, 대화, 인벤토리, 전투 및 저장/불러오기를 직접 확인하세요.\n\n"
+                "엔진 ABI가 변경되었거나 오래된 sfall과 충돌하면 안전하게 설치를 중단합니다.\n"
+                "Olympus/Nevada 전용 Extended sfall을 일반 버전으로 바꾸지 마세요.\n"
+                "기존 파일의 복구는 아래 복구 버튼으로 실행할 수 있습니다.",
                 parent=self)
             return
         if self.experimental:

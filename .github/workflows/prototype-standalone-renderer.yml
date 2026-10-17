@@ -1,4 +1,4 @@
-name: Prototype independent Korean renderer
+name: Independent Korean renderer beta
 
 on:
   push:
@@ -48,22 +48,22 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item build/standalone/fallout2font.dll standalone-font.dll
-          pyinstaller --noconfirm --clean --onefile --windowed --name Fallout2-Korean-Native-EXPERIMENTAL --paths . --add-data "runtime-manifest.json;." --add-data "fallout2font.dll;." --add-data "fallout2font.ini;." --add-data "standalone-font.dll;." --add-data "fonts;fonts" tools/gui_installer.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name Fallout2-Korean-Native-Setup --paths . --add-data "runtime-manifest.json;." --add-data "fallout2font.dll;." --add-data "fallout2font.ini;." --add-data "standalone-font.dll;." --add-data "fonts;fonts" tools/gui_installer.py
           if ($LASTEXITCODE -ne 0) { throw "Prototype GUI build failed." }
       - name: Check experimental installer bundle offline
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath "./dist/Fallout2-Korean-Native-EXPERIMENTAL.exe" -ArgumentList "--self-test" -Wait -PassThru
+          $p = Start-Process -FilePath "./dist/Fallout2-Korean-Native-Setup.exe" -ArgumentList "--self-test" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Experimental installer bundled self-test failed." }
       - name: Keep prototype separate from stable releases
         uses: actions/upload-artifact@v4
         with:
-          name: independent-korean-native-exe-x86-prototype
+          name: independent-korean-native-beta-x86
           path: |
             build/standalone/fallout2font.dll
             fallout2font.ini
             fonts/Galmuri9.ttf
             fonts/Galmuri11.ttf
             fonts/Galmuri-LICENSE.txt
-            dist/Fallout2-Korean-Native-EXPERIMENTAL.exe
+            dist/Fallout2-Korean-Native-Setup.exe
           if-no-files-found: error
