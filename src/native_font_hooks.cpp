@@ -16,6 +16,7 @@ extern "C" void __cdecl SelectFont(int);
 extern "C" int __cdecl GetTextWidth(const char*);
 extern "C" int __cdecl GetTextHeight();
 extern "C" void __cdecl TextOutput(const char*, int, int, BYTE*, int);
+extern "C" int __cdecl IsGameUiKnobPrefix(const char*, int);
 
 namespace {
 constexpr uintptr_t kGameBase = 0x400000;
@@ -250,7 +251,9 @@ extern "C" __declspec(dllexport) int __cdecl KoreanWordWrap(
             if (text[next] == '\r' || text[next] == '\n') break;
             int charLen = 1;
             BYTE lead = static_cast<BYTE>(text[next]);
-            if (next + 1 < bytes && IsDBCSLeadByteEx(949, lead)) {
+            if (next == 0 && IsGameUiKnobPrefix(text, static_cast<int>(bytes))) {
+                charLen = 1;
+            } else if (next + 1 < bytes && IsDBCSLeadByteEx(949, lead)) {
                 wchar_t decoded;
                 if (MultiByteToWideChar(949, MB_ERR_INVALID_CHARS, text + next, 2, &decoded, 1) == 1)
                     charLen = 2;
