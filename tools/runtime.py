@@ -140,7 +140,9 @@ def put_ini(text, section, key, value):
 
 
 def decode_ini(raw):
-    for encoding in ('utf-8-sig', 'cp949'):
+    if raw.startswith(b'\xef\xbb\xbf'):
+        return raw.decode('utf-8-sig'), 'utf-8-sig'
+    for encoding in ('utf-8', 'cp949'):
         try:
             return raw.decode(encoding), encoding
         except UnicodeDecodeError:
