@@ -69,7 +69,32 @@ def detect_native_config(target, executable_names):
         if candidate and candidate not in choices:
             choices.append(candidate)
     if len(choices) > 1:
-        raise ValueError('Multiple game configurations found; refusing an ambiguous installation.')
+        # Extended sfall mods can bundle a vanilla fallout2.exe/.cfg alongside
+        # their own launcher/CFG. Respect the *active* sfall ConfigFile instead
+        # of guessing from a folder or game name. Reject missing/unsafe hints.
+        ini = Path(target) / 'ddraw.ini'
+        if ini.is_file() and not ini.is_symlink():
+            text, _ = decode_ini(ini.read_bytes())
+            hints = []
+            active = False
+            for line in text.splitlines():
+                clean = line.strip()
+                if not clean or clean.startswith((';', '#')):
+                    continue
+                if clean.startswith('['):
+                    active = clean.casefold() == '[misc]'
+                elif active and '=' in clean:
+                    key, value = clean.split('=', 1)
+                    if key.strip().casefold() == 'configfile':
+                        hints.append(value.split(';', 1)[0].strip())
+            if len(hints) == 1:
+                import re
+                hint = hints[0]
+                if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\.cfg', hint, re.I):
+                    match = configs.get(hint.casefold())
+                    if match in choices:
+                        return match
+        raise ValueError('Multiple game configurations found without one verified sfall ConfigFile.')
     if choices:
         return choices[0]
     if 'fallout2.cfg' in configs:
@@ -209,11 +234,14 @@ def read_ini_option(text, section, key):
 
 
 
-def ensure_sfall_crc(text, crc):
+def ensure_sfall_crc(text, crc, allowed_size_tokens=()):
     """Register a single CJK-compatible EXE CRC without rewriting other INI data.
 
     Preserve whitespace, line endings, existing entries, comments and BOM.
-    Refuse ambiguous duplicate [Debugging] / ExtraCRC entries.
+    Refuse ambiguous duplicate [Debugging] / ExtraCRC entries. Some extended
+    sfall mods also list the *original* EXE byte lengths as decimal tokens;
+    preserve only lengths verified against detected compatible EXEs when the
+    existing INI explicitly enables SkipSizeCheck.
     """
     import re
 
@@ -252,9 +280,13 @@ def ensure_sfall_crc(text, crc):
             raise ValueError('Malformed sfall ExtraCRC entry.')
         current = match.group(2)
         tokens = [item.strip() for item in current.split(',') if item.strip()]
-        if any(not re.fullmatch(r'0[xX][0-9a-fA-F]{1,8}', item) for item in tokens):
+        sizes = {str(size) for size in allowed_size_tokens}
+        allow_sizes = (read_ini_option(text, 'Debugging', 'SkipSizeCheck') == '1')
+        if any(not re.fullmatch(r'0[xX][0-9a-fA-F]{1,8}', item) and
+               not (allow_sizes and item in sizes) for item in tokens):
             raise ValueError('Unrecognized existing sfall ExtraCRC entry; refusing to edit.')
-        if any(int(item, 16) == int(crc, 16) for item in tokens):
+        if any(item.lower().startswith('0x') and int(item, 16) == int(crc, 16)
+               for item in tokens):
             return text
         value = current.rstrip()
         trailing = current[len(value):]
@@ -357,7 +389,8 @@ def install_native(args, target, manifest):
             crc = f'0x{sfall_crc(payload[name], manifest["crc_table"]):08X}'
             if crc not in crcs:
                 crcs.append(crc)
-                updated = ensure_sfall_crc(updated, crc)
+                updated = ensure_sfall_crc(updated, crc,
+                                           allowed_size_tokens=(len(data) for data in original_exes.values()))
         if updated.encode(encoding) != current_ini:
             payload['ddraw.ini'] = updated.encode(encoding)
     cfg_path = checked_destination(target, config_name)

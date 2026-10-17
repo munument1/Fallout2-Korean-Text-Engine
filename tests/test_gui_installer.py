@@ -142,6 +142,41 @@ class GuiInstallerTests(unittest.TestCase):
         self.assertEqual(set(detect_native_executables(game)), {"Nevada.exe", "NevadaHD.exe"})
         self.assertEqual(detect_native_config(game, detect_native_executables(game)), "Nevada.cfg")
 
+    def test_multiple_config_files_choose_safe_sfall_hint(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            (folder / 'fallout2.cfg').write_text('[system]\nlanguage=english\n')
+            (folder / 'olympus.cfg').write_text('[system]\nlanguage=english\n')
+            ini = folder / 'ddraw.ini'
+            ini.write_text('[Misc]\nConfigFile=olympus.cfg\n')
+            names = ['fallout2.exe', 'fallout2HR.exe', 'olympus.exe']
+            self.assertEqual(detect_native_config(folder, names), 'olympus.cfg')
+            ini.write_text('[Misc]\nConfigFile=../evil.cfg\n')
+            with self.assertRaisesRegex(ValueError, 'Multiple game configurations'):
+                detect_native_config(folder, names)
+            ini.write_text('[Misc]\nConfigFile=olympus.cfg\nConfigFile=fallout2.cfg\n')
+            with self.assertRaisesRegex(ValueError, 'Multiple game configurations'):
+                detect_native_config(folder, names)
+
+    @unittest.skipUnless(__import__('os').environ.get('KOREAN_ENGINE_OLYMPUS_DIR'),
+                         'Owner Olympus 2207 files unavailable')
+    def test_olympus_real_extended_ini_and_three_exes_detect_without_profile(self):
+        from os import environ
+        from tools.install_engine import ensure_sfall_crc
+        from tools.runtime import decode_ini
+        game = Path(environ['KOREAN_ENGINE_OLYMPUS_DIR'])
+        executables = detect_native_executables(game)
+        self.assertEqual(set(executables), {'fallout2.exe', 'fallout2HR.exe', 'olympus.exe'})
+        # The input points to the owner's read-only pre-install snapshot;
+        # validate the exact original executable/INI combination.
+        self.assertEqual(detect_native_config(game, executables), 'olympus.cfg')
+        original = (game / 'ddraw.ini').read_bytes()
+        text, _ = decode_ini(original)
+        changed = ensure_sfall_crc(text, '0xA1B2C3D4',
+                                   allowed_size_tokens=(1189888, 1483776))
+        self.assertIn('0xA1B2C3D4', changed)
+        self.assertIn('1189888,1483776', changed)
+
     def test_missing_profile_dependency_is_not_detected(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
