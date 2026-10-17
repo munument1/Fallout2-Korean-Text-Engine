@@ -184,7 +184,7 @@ class Installer(tk.Tk):
 
         ttk.Label(outer, text="Fallout 2 한국어 출력 엔진",
                   font=("Malgun Gothic", 17, "bold")).pack(anchor="w")
-        ttk.Label(outer, text=("독립형 시험판: Fallout 2 계열 게임/모드 폴더 하나만 선택하세요."
+        ttk.Label(outer, text=("독립형 공개 베타: Fallout 2 계열 게임/모드 폴더 하나만 선택하세요."
                                if self.native_mode else
                                "시험판: 게임 폴더만 선택 → 확인 후 설치. 기존 파일 자동 백업."
                                if self.experimental else
@@ -226,8 +226,9 @@ class Installer(tk.Tk):
             ttk.Label(outer, textvariable=self.cjk_summary, wraplength=670,
                       foreground="#555").pack(anchor="w", pady=(3, 8))
 
-        ttk.Checkbutton(outer, text="고급 설정 (추가 원본 EXE · 메뉴 설정)",
-                        variable=self.advanced, command=self._toggle_advanced).pack(anchor="w")
+        if not self.native_mode:
+            ttk.Checkbutton(outer, text="고급 설정 (추가 원본 EXE · 메뉴 설정)",
+                            variable=self.advanced, command=self._toggle_advanced).pack(anchor="w")
         self.advanced_frame = ttk.Frame(outer)
         if not self.native_mode:
             self._file_row(self.advanced_frame, "원본 Fallout 2 US 1.02d EXE (일부 모드에서 필요)", self.base)
@@ -473,7 +474,7 @@ class Installer(tk.Tk):
 
     def _help(self):
         if self.native_mode:
-            messagebox.showinfo("Fallout 2 범용 독립형 한국어 엔진 시험판",
+            messagebox.showinfo("Fallout 2 범용 독립형 한국어 엔진 베타",
                 "① Fallout 2 계열 게임 또는 모드를 별도 폴더에 백업합니다.\n"
                 "② 게임 폴더만 지정하세요. 게임 종류 선택이나 중국어 CJK 파일은 필요 없습니다.\n"
                 "③ 호환 Watcom EXE를 구조 검사한 뒤 원본을 백업하고 한국어 로더를 설치합니다.\n"
