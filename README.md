@@ -18,15 +18,15 @@ Sonora `eng_repack` 개발본은 [별도 자료](https://github.com/munument1/Fa
 
 ---
 
-## 기존 CJK 기반 정식판 (v1.0.0, 별도 방식)
+## 기존 CJK 기반 v1.0.0 (이전 설치 방식)
 
-아래의 정식판은 **중국어판 파일을 사용자가 준비해야 하는 이전 설치 방식**입니다. 위의 독립형 베타 2와 설치 방법이 다르며, 독립형 엔진을 사용하려면 이 정식판 설치기를 내려받지 마세요.
+아래 v1.0.0은 GitHub에서 프리릴리즈로 표시된 **중국어판 파일을 사용자가 준비해야 하는 이전 설치 방식**입니다. 위의 독립형 베타 2와 설치 방법이 다르며, 독립형 엔진을 사용하려면 이 이전 설치기를 내려받지 마세요.
 
 클래식 **Fallout 2와 호환 모드에서 한글을 표시해 주는 프로그램**입니다. 한국어 글꼴과 줄바꿈을 지원하며, 기존 파일은 설치할 때 백업합니다.
 
 ### 이전 방식 다운로드
 
-**[Windows 설치기 다운로드 (.exe)](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/latest/download/Fallout2-Korean-Text-Engine-Setup.exe)**
+**[이전 방식 Windows 설치기 다운로드 (.exe)](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/download/v1.0.0/Fallout2-Korean-Text-Engine-Setup.exe)**
 
 Python이나 명령어 입력 없이 실행할 수 있습니다.
 
@@ -55,6 +55,6 @@ Fallout 2 원본 / Restoration Project Updated / Fallout Et Tu / Fallout Sonora 
 
 ## 개발자용 자료
 
-[고급 설치·구조 설명](docs/TECHNICAL.md) · [게임별 검증 기록](docs/validation.json) · [테스트 안내](docs/TESTING.md) · [개발자용 ZIP](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/latest)
+[고급 설치·구조 설명](docs/TECHNICAL.md) · [게임별 검증 기록](docs/validation.json) · [테스트 안내](docs/TESTING.md) · [이전 CJK 방식 개발자용 ZIP](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/download/v1.0.0/korean-text-engine.zip)
 
 새 출력 어댑터 및 설치 도구는 MIT, Galmuri 글꼴은 OFL 라이선스를 따릅니다.
