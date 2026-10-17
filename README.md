@@ -12,6 +12,8 @@
 [Olympus 2207](https://github.com/munument1/Fallout2-Olympus2207-KR/releases/tag/v2026.10.17-native-beta.1) ·
 [Resurrection 1.5](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/v2026.10.17-native-beta.2) ·
 [Sonora 1.16.4/DLC 공통 번역](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v1.16.4-native-beta.2).
+[Et Tu 2.0.3911](https://github.com/munument1/Fallout2-EtTu-KR/releases/tag/v2.0.3911-native-beta.2) ?
+[RPU 2.4.34](https://github.com/munument1/Fallout2-RPU-KR/releases/tag/v2.4.34-native-beta.2).
 Sonora `eng_repack` 개발본은 [별도 자료](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v2026.10.17-native-beta.1)입니다. Et Tu와 RPU의 원본 업데이트는 아직 진행 중입니다.
 
 **아직 공개 베타입니다.** 한국어 메뉴·짧은 기동과 파일 해시 검증은 진행했지만 모든 모드의 장시간 대화·전투·저장/불러오기를 전수 검증하지 않았습니다. 기존 모드 전용 sfall(특히 Nevada/Olympus Extended)을 일반판으로 무조건 교체하지 마세요. Resurrection은 확장자 없는 `FALLOUT2`가 실제 엔진이고 `fores.exe`는 별도 런처이며, 기존 구형 sfall과 고해상도 패치의 호환 설정이 필요합니다.
