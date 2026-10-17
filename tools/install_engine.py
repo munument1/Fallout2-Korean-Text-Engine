@@ -646,7 +646,7 @@ def main():
     parser.add_argument('--standalone-font', type=Path,
                         help='Experiment only: independently compiled font DLL; no Chinese legacy font DLL')
     parser.add_argument('--native-exe', action='store_true',
-                        help='EXPERIMENT: patch exact stock US 1.02d from scratch, no CJK binary or download')
+                        help='EXPERIMENT: structurally detect compatible Fallout 2 Watcom EXEs, no CJK binaries')
     parser.add_argument('--auto-cjk-exe', action='store_true',
                         help='Explicit opt-in: temporarily download a hash-pinned upstream CJK EXE')
     parser.add_argument('--base-exe', type=Path)
