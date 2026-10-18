@@ -1,3 +1,9 @@
+# 설치 경로 안내 (v1.2.1)
+
+게임을 종료한 뒤 기존 설치 폴더에 바로 설치할 수 있습니다. Steam 설치 폴더와 그 안의 모드 폴더도 허용합니다. 시험용 전체 복사본 준비는 선택 사항입니다. 수정 대상 파일은 `korean_engine_backup_v2`에 자동 백업되며 같은 폴더를 선택해 복구할 수 있습니다. 호환성 검사와 Resurrection 제외 정책은 유지됩니다.
+
+아래는 이전 CJK 방식의 기술 기록입니다. 현재 설치 방법은 [README](../README.md)를 따르세요.
+
 # Fallout 2 Korean Text Engine — 기술 설명 및 고급 설치
 
 공식 sfall DLL을 수정하지 않고 클래식 Fallout 2에 CP949 한국어 출력·글꼴·줄바꿈을 제공하는 공통 출력 모듈이다. 번역 데이터는 각 모드의 번역 저장소에서 별도로 관리한다.
@@ -31,7 +37,7 @@
 
 ## 설치
 
-게임을 종료하고 독립 복사본에서 실행한다. 기존 Steam 원본 설치 경로는 도구가 보호한다. 이전 방식의 한국어 `ddraw.dll`을 계속 사용하는 구성과 섞지 않는다.
+게임을 종료하고 설치할 게임 폴더에서 실행한다. Steam 원본 설치 경로도 허용하며 시험용 복사본은 선택 사항이다. 이전 방식의 한국어 `ddraw.dll`을 계속 사용하는 구성과 섞지 않는다.
 
 1. 해당 모드와 [공식 sfall 4.5.1](https://github.com/sfall-team/sfall/releases/tag/v4.5.1)을 준비한다. 공식 `ddraw.dll`·`sfall.dat`를 사용하고 모드의 기존 설정·스크립트·DAT는 유지한다.
 2. Python 3.10 이상에서 이 저장소의 의존성을 설치한다.
@@ -41,7 +47,7 @@
    ```
 
 3. 직접 보유한 `FO2_UPU_CHT_v34`의 **원본 CJK Fallout2.exe와 fallout2font.dll**을 별도로 준비한다. 허용 해시는 `runtime-manifest.json`에 있다. 기존 RPU v28의 한국어 sfall DLL은 대상이 아니다.
-4. 아래 예시에서 게임 복사본·CJK 파일 경로와 프로필을 자신의 환경에 맞춘다. 먼저 `--dry-run`으로 확인한 뒤 같은 명령에서 `--dry-run`을 빼고 설치한다.
+4. 아래 예시에서 게임 폴더·CJK 파일 경로와 프로필을 자신의 환경에 맞춘다. 먼저 `--dry-run`으로 확인한 뒤 같은 명령에서 `--dry-run`을 빼고 설치한다.
 
    ```powershell
    python tools/install_engine.py 'D:\Games\RPU-test' --profile rpu --cjk-exe 'D:\CJK\Fallout2.exe' --legacy-font 'D:\CJK\fallout2font.dll' --dry-run
@@ -67,7 +73,7 @@
 
 ## 복구
 
-설치 전 파일은 게임 복사본의 `korean_engine_backup_v2`에 보관한다.
+설치 전 파일은 선택한 게임 폴더의 `korean_engine_backup_v2`에 보관한다.
 
 ```powershell
 python tools/install_engine.py 'D:\Games\RPU-test' --restore --dry-run

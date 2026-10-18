@@ -60,6 +60,26 @@ class NativeInstallRecoveryTests(unittest.TestCase):
         self.assertFalse((self.game / engine.BACKUP).exists())
         self.assertEqual(list(self.game.glob(engine.BACKUP + '-staging-*')), [])
 
+    def test_install_and_restore_in_existing_steam_directory(self):
+        steam = self.root / 'steamapps' / 'common' / 'Fallout 2'
+        steam.parent.mkdir(parents=True)
+        self.game.rename(steam)
+        self.game = engine.validate_target(steam)
+        saved_game = self.game / 'data' / 'SAVEGAME' / 'SLOT01' / 'SAVE.DAT'
+        saved_game.parent.mkdir(parents=True)
+        saved_game.write_bytes(b'existing-save-must-survive')
+        before = {p.relative_to(self.game): p.read_bytes()
+                  for p in self.game.rglob('*') if p.is_file()}
+        self.install()
+        self.assertEqual((self.game / 'fallout2.exe').read_bytes(), self.patched_exe)
+        self.assertEqual((self.game / engine.BACKUP / 'fallout2.exe').read_bytes(),
+                         self.original_exe)
+        self.assertEqual(saved_game.read_bytes(), before[saved_game.relative_to(self.game)])
+        engine.restore(engine.validate_target(steam), dry_run=False)
+        for name, original in before.items():
+            self.assertEqual((self.game / name).read_bytes(), original)
+        self.assertFalse((self.game / 'fallout2font.dll').exists())
+
     def test_backup_copy_failure_leaves_no_incomplete_backup(self):
         with mock.patch.object(engine.shutil, 'copy2', side_effect=OSError('backup I/O error')):
             with self.assertRaisesRegex(OSError, 'backup I/O error'):

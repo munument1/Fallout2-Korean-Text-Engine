@@ -1,19 +1,19 @@
 # Fallout 2 한국어 출력 엔진
 
-## 독립형 한국어 엔진 — 정식판 v1.2.0
+## 독립형 한국어 엔진 — 정식판 v1.2.1
 
-**[독립형 Windows 설치기 v1.2.0 다운로드](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/tag/v1.2.0)**
+**[독립형 Windows 설치기 v1.2.1 다운로드](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/tag/v1.2.1)**
 
 사용자가 게임 폴더를 하나 선택하면 호환되는 Fallout 2 계열 실행 파일의 **Watcom ABI·PE 구조를 자동 검사**해 한국어 출력 기능을 설치합니다. 게임 종류·중국어 CJK EXE·글꼴 DLL 입력을 요구하지 않으며, EXE 전체 해시만 다른 호환 업데이트도 처리할 수 있습니다. ABI 자체가 바뀐 실행 파일은 안전하게 거부합니다.
 
-설치 순서는 **게임 버전과 일치하는 한국어 번역 ZIP을 먼저 적용 → 독립형 설치기 실행 → 기존 게임 런처 실행**입니다. 수정 대상 원본 파일만 복구용으로 보관하고 게임 전체 복사본을 강제로 생성하지 않습니다.
+설치 순서는 **게임 버전과 일치하는 한국어 번역 ZIP을 먼저 적용 → 독립형 설치기 실행 → 기존 게임 런처 실행**입니다. **Steam을 포함한 기존 설치 폴더에 바로 설치할 수 있습니다.** 게임을 종료한 뒤 사용 중인 게임·모드 폴더를 선택하세요. 시험용 전체 복사본 준비는 선택 사항입니다. 수정 대상 원본 파일만 `korean_engine_backup_v2`에 자동 백업하며 같은 폴더에서 복구할 수 있습니다.
 
 현재 번역 ZIP: [Nevada](https://github.com/munument1/Fallout2-Nevada-KR/releases/tag/v2026.10.17-native-beta.1) ·
 [Olympus 2207](https://github.com/munument1/Fallout2-Olympus2207-KR/releases/tag/v2026.10.17-native-beta.1) ·
 [Sonora 1.16.4/DLC 공통 번역](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v1.16.4-native-beta.2) ·
 [Et Tu 2.0.3911](https://github.com/munument1/Fallout2-EtTu-KR/releases/tag/v2.0.3911-native-beta.2) ·
 [RPU 2.4.34](https://github.com/munument1/Fallout2-RPU-KR/releases/tag/v2.4.34-native-beta.2).
-**Resurrection 1.5는 독립형 범용 엔진 설치 대상에서 제외합니다.** 구형 sfall과 고해상도 패치의 호환성 때문에 [기존 Resurrection KR1.1 정식 한국어 패치](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/Resurrection-V1.5-KR1.1)를 사용하세요. **v1.2.0 정식 설치기는 Resurrection의 런처·CFG·엔진 구성을 감지해 파일을 변경하기 전에 설치를 중단합니다.** 이전 beta.2는 이 차단 기능이 없으므로 Resurrection에 사용하지 마세요.
+**Resurrection 1.5는 독립형 범용 엔진 설치 대상에서 제외합니다.** 구형 sfall과 고해상도 패치의 호환성 때문에 [기존 Resurrection KR1.1 정식 한국어 패치](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/Resurrection-V1.5-KR1.1)를 사용하세요. **v1.2.1 정식 설치기는 Resurrection의 런처·CFG·엔진 구성을 감지해 파일을 변경하기 전에 설치를 중단합니다.** 이전 beta.2는 이 차단 기능이 없으므로 Resurrection에 사용하지 마세요.
 
 Sonora `eng_repack` 개발본은 [별도 자료](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v2026.10.17-native-beta.1)입니다. Et Tu와 RPU의 원본 업데이트는 아직 진행 중입니다.
 
@@ -35,7 +35,7 @@ Python이나 명령어 입력 없이 실행할 수 있습니다.
 
 ### 이전 CJK 방식 설치 방법
 
-1. **게임 준비:** Fallout 2 또는 지원 모드를 별도 폴더에 준비하고 [공식 sfall 4.5.1](https://github.com/sfall-team/sfall/releases/tag/v4.5.1)을 적용합니다.
+1. **게임 준비:** 기존 Fallout 2 또는 지원 모드 폴더를 준비하고 [공식 sfall 4.5.1](https://github.com/sfall-team/sfall/releases/tag/v4.5.1)을 적용합니다.
 2. **설치기 실행:** 게임 폴더와 직접 확보한 **FO2_UPU_CHT_v34의 CJK 파일 폴더**를 선택합니다.
 3. **「설치하기」 클릭:** 파일을 자동 검사하고 설치합니다. 설치 후 **게임별 한국어 번역 패치**를 별도로 적용하면 됩니다.
 
@@ -53,7 +53,7 @@ Fallout 2 원본 / Restoration Project Updated / Fallout Et Tu / Fallout Sonora 
 
 - 이 프로그램은 **한국어 출력 엔진**입니다. 대사·책·인터페이스의 번역 데이터는 각 모드의 한국어 패치에서 별도로 제공합니다.
 - 게임 EXE, 공식 sfall DLL 및 외부 CJK 원본 파일은 배포하지 않습니다. 이용자가 직접 확보한 파일을 사용합니다.
-- 원본 Steam 설치 경로는 보호 대상이므로 **게임 복사본**에 설치하세요.
+- 기존 Steam 설치 폴더에도 바로 설치할 수 있습니다. 시험용 복사본 준비는 선택 사항입니다.
 - 오류가 나면 [Issues](https://github.com/munument1/Fallout2-Korean-Text-Engine/issues)에 게임 버전과 오류 메시지를 남겨 주세요.
 
 ## 개발자용 자료

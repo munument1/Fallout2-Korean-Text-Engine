@@ -15,7 +15,6 @@ else:
     from native_pe import native_exe
 
 ROOT = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
-STEAM = Path(r'C:\Games\Steam\steamapps\common\Fallout 2').resolve()
 BACKUP = 'korean_engine_backup_v2'
 RESURRECTION_LEGACY_PATCH = (
     'https://github.com/munument1/Fallout-1.5-Resurrection-KR/'
@@ -143,15 +142,14 @@ def has_native_korean_text(target):
 
 
 def validate_target(target):
-    """Reject a Steam-managed original game installation; write only to a copy."""
+    """Accept an existing game directory, including Steam-managed installs.
+
+    Compatibility checks and transactional backup/restore apply equally to
+    existing installations and optional test copies.
+    """
     target = Path(target).resolve(strict=True)
     if not target.is_dir():
         raise ValueError('Select an existing game directory.')
-    parts = tuple(part.casefold() for part in target.parts)
-    managed = any(parts[index:index + 3] == ('steamapps', 'common', 'fallout 2')
-                  for index in range(len(parts) - 2))
-    if managed or target == STEAM or STEAM in target.parents:
-        raise ValueError('Use an independent game copy; the original Steam installation is protected.')
     return target
 
 

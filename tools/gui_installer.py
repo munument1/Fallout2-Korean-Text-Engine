@@ -446,7 +446,7 @@ class Installer(tk.Tk):
                               if check.get("sfall_crc_added") else
                               "기존 sfall의 CRC 설정은 변경하지 않습니다.\n")
             if not messagebox.askyesno("설치 확인",
-                    "게임 복사본에 한국어 출력 엔진을 설치합니다.\n"
+                    "선택한 게임 폴더에 한국어 출력 엔진을 설치합니다.\n"
                     + ("중국어 폰트 DLL 없이 자체 렌더러를 사용합니다.\n"
                        if self.experimental else "")
                     + setting_notice +
@@ -489,8 +489,8 @@ class Installer(tk.Tk):
     def _help(self):
         if self.native_mode:
             messagebox.showinfo("Fallout 2 범용 독립형 한국어 엔진",
-                "① Fallout 2 계열 게임 또는 모드를 별도 폴더에 백업합니다.\n"
-                "② 게임 폴더만 지정하세요. 게임 종류 선택이나 중국어 CJK 파일은 필요 없습니다.\n"
+                "① 게임을 종료하고 기존 설치 폴더를 선택하세요. Steam 설치 폴더도 지원합니다.\n"
+                "② 시험용 전체 복사본 준비는 선택 사항입니다. 게임 종류나 중국어 파일 선택은 필요 없습니다.\n"
                 "③ 호환 Watcom EXE를 구조 검사한 뒤 원본을 백업하고 한국어 로더를 설치합니다.\n"
                 "④ 기존 sfall이 있다면 모드 설정을 유지하면서 필요한 ExtraCRC만 등록합니다.\n"
                 "⑤ 별도 번역 MSG가 없는 게임은 현재 언어 설정을 유지합니다.\n"
@@ -502,7 +502,7 @@ class Installer(tk.Tk):
             return
         if self.experimental:
             messagebox.showinfo("독립 렌더러 시험판 안내",
-                "① 게임을 안전한 별도 폴더에 복사합니다.\n"
+                "① 기존 게임 폴더를 사용합니다. 시험용 복사본 준비는 선택 사항입니다.\n"
                 "② 게임 폴더만 선택합니다.\n"
                 "③ 설치 전에 외부 NovaRain 저장소의 CJK EXE 임시 다운로드를 승인합니다.\n"
                 "   EXE는 SHA-256 검사 후 사용하며 중국어 글꼴 DLL은 받지 않습니다.\n"
@@ -512,7 +512,7 @@ class Installer(tk.Tk):
                 "정식 릴리즈가 아닌 시험용 설치기입니다.", parent=self)
             return
         messagebox.showinfo("간단 설치 안내",
-            "① Fallout 2 / 호환 모드를 별도 폴더에 준비합니다.\n"
+            "① 기존 Fallout 2 / 호환 모드 폴더를 선택합니다. 복사본 준비는 선택 사항입니다.\n"
             "   sfall은 순정판 한글 출력에 필수는 아닙니다.\n"
             "   모드가 sfall을 요구하면 기존 구성을 유지하세요.\n"
             "   필요한 ExtraCRC는 기존 설정을 보존한 채 자동으로 추가합니다.\n"

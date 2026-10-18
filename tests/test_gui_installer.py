@@ -260,15 +260,22 @@ class GuiInstallerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unverified ddraw.dll'):
             inspect_sfall(target, {'official_sfall_sha256': 'unused'})
 
-    def test_original_steam_directory_is_protected(self):
+    def test_existing_steam_and_mod_directories_are_allowed(self):
         with tempfile.TemporaryDirectory() as temp:
             steam = Path(temp) / "steamapps" / "common" / "Fallout 2"
-            steam.mkdir(parents=True)
-            with self.assertRaisesRegex(ValueError, "Steam"):
-                validate_target(steam)
-            copy = Path(temp) / "FO2-copy"
-            copy.mkdir()
-            self.assertEqual(validate_target(copy), copy.resolve())
+            for target in (steam, steam / "Fallout1in2", Path(temp) / "FO2-copy"):
+                with self.subTest(target=target):
+                    target.mkdir(parents=True, exist_ok=True)
+                    self.assertEqual(validate_target(target), target.resolve())
+
+    def test_target_still_requires_an_existing_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "missing"
+            with self.assertRaises(FileNotFoundError):
+                validate_target(target)
+            target.write_bytes(b"not a directory")
+            with self.assertRaisesRegex(ValueError, "existing game directory"):
+                validate_target(target)
 
 
 if __name__ == "__main__":
