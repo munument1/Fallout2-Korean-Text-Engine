@@ -188,7 +188,7 @@ class Installer(tk.Tk):
 
         ttk.Label(outer, text="Fallout 2 한국어 출력 엔진",
                   font=("Malgun Gothic", 17, "bold")).pack(anchor="w")
-        ttk.Label(outer, text=("독립형 한국어 출력 엔진: Fallout 2 계열 게임/모드 폴더 하나만 선택하세요."
+        ttk.Label(outer, text=("한국어로 플레이할 게임 폴더를 선택하세요."
                                if self.native_mode else
                                "시험판: 게임 폴더만 선택 → 확인 후 설치. 기존 파일 자동 백업."
                                if self.experimental else
@@ -209,13 +209,13 @@ class Installer(tk.Tk):
 
         if self.native_mode:
             ttk.Label(outer,
-                      text="호환되는 Fallout 2 Watcom 실행 파일을 내부 구조로 자동 검사합니다. 게임 종류 선택이나 중국어 CJK 파일이 필요 없습니다.",
+                      text="게임을 종료한 뒤 설치하세요. 변경되는 파일은 자동으로 백업합니다.",
                       foreground="#555", wraplength=670).pack(anchor="w", pady=(2, 8))
         elif self.experimental:
-            ttk.Label(outer, text="독립형 글꼴 렌더러 시험판: 기존 CJK DLL은 사용하지 않습니다.",
+            ttk.Label(outer, text="시험용 설치기입니다. 설치할 게임 폴더를 선택하세요.",
                       foreground="#555", wraplength=670).pack(anchor="w")
             ttk.Checkbutton(outer,
-                            text="NovaRain 저장소의 검증된 CJK EXE를 임시로 자동 다운로드 (아직 EXE는 의존)",
+                            text="설치에 필요한 실행 파일을 NovaRain 저장소에서 다운로드",
                             variable=self.auto_source, command=self._toggle_auto_source).pack(anchor="w", pady=(4, 5))
             self.cjk_block = ttk.Frame(outer)
             self._folder_row(self.cjk_block, "선택 사항: 직접 보유한 CJK EXE 폴더", self.cjk_folder,
@@ -321,8 +321,8 @@ class Installer(tk.Tk):
                 else:
                     executables = engine.detect_native_executables(path)
                     config = engine.detect_native_config(path, executables.keys())
-                    self.summary.set("자동 호환성 검사 통과: " + ", ".join(executables) +
-                                     " / 설정: " + config)
+                    self._append("호환성 검사 통과: " + ", ".join(executables) + " / 설정: " + config)
+                    self.summary.set("설치할 수 있는 게임 폴더입니다.")
                 return
             matches = detect_profiles(path, self.manifest)
             self.combo.configure(values=[PROFILE_TITLES[key] for key in matches])
@@ -420,8 +420,6 @@ class Installer(tk.Tk):
             if self.experimental and not self.native_mode and self.auto_source.get():
                 if not messagebox.askyesno(
                     "CJK 실행 파일 임시 다운로드",
-                    "자체 한글 렌더러는 중국어 글꼴 DLL을 사용하지 않습니다.\n"
-                    "다만 현재는 기존 CJK EXE의 엔진 훅 코드가 필요합니다.\n\n"
                     "NovaRain의 공식 GitHub 저장소에서 원본 EXE를 임시로 받아 "
                     "SHA-256을 검증하고 설치 후 임시 파일을 삭제할까요?\n"
                     "기존 게임 파일은 백업합니다.", parent=self):
@@ -442,15 +440,9 @@ class Installer(tk.Tk):
                     "한국어 출력 연결만 적용합니다.\n"
                     "해당 sfall 버전과 수정 EXE의 실제 게임 호환성은 별도 확인이 필요합니다.",
                     parent=self)
-            setting_notice = ("기존 ddraw.ini에 한국어 EXE용 ExtraCRC를 추가합니다.\n"
-                              if check.get("sfall_crc_added") else
-                              "기존 sfall의 CRC 설정은 변경하지 않습니다.\n")
             if not messagebox.askyesno("설치 확인",
-                    "선택한 게임 폴더에 한국어 출력 엔진을 설치합니다.\n"
-                    + ("중국어 폰트 DLL 없이 자체 렌더러를 사용합니다.\n"
-                       if self.experimental else "")
-                    + setting_notice +
-                    "수정되는 원본 파일은 자동 백업합니다. 계속할까요?", parent=self):
+                    "선택한 게임 폴더에 한국어 출력 엔진을 설치할까요?\n"
+                    "변경되는 원본 파일은 자동으로 백업합니다.", parent=self):
                 return
             arguments.dry_run = False
             outcome = engine.install(arguments, target)
@@ -458,7 +450,7 @@ class Installer(tk.Tk):
             if self.native_mode and not outcome.get("korean_translation_detected"):
                 completion = (
                     "한국어 출력 엔진을 설치했습니다.\n"
-                    "현재 한국어 MSG 번역이 감지되지 않아 언어 설정은 유지했습니다.\n"
+                    "한국어 번역 파일을 찾지 못했습니다.\n"
                     "한국어 번역 ZIP을 적용한 뒤 엔진을 복구하고 다시 설치하면 "
                     "한국어 언어 설정이 자동 반영됩니다."
                 )
@@ -488,17 +480,13 @@ class Installer(tk.Tk):
 
     def _help(self):
         if self.native_mode:
-            messagebox.showinfo("Fallout 2 범용 독립형 한국어 엔진",
-                "① 게임을 종료하고 기존 설치 폴더를 선택하세요. Steam 설치 폴더도 지원합니다.\n"
-                "② 시험용 전체 복사본 준비는 선택 사항입니다. 게임 종류나 중국어 파일 선택은 필요 없습니다.\n"
-                "③ 호환 Watcom EXE를 구조 검사한 뒤 원본을 백업하고 한국어 로더를 설치합니다.\n"
-                "④ 기존 sfall이 있다면 모드 설정을 유지하면서 필요한 ExtraCRC만 등록합니다.\n"
-                "⑤ 별도 번역 MSG가 없는 게임은 현재 언어 설정을 유지합니다.\n"
-                "⑥ 메뉴, 대화, 인벤토리, 전투 및 저장/불러오기를 직접 확인하세요.\n\n"
-                "엔진 ABI가 변경되었거나 오래된 sfall과 충돌하면 안전하게 설치를 중단합니다.\n"
-                "Olympus/Nevada 전용 Extended sfall을 일반 버전으로 바꾸지 마세요.\n"
-                "기존 파일의 복구는 아래 복구 버튼으로 실행할 수 있습니다.",
-                parent=self)
+            messagebox.showinfo("설치 방법",
+                "① 게임을 종료하고 게임 버전에 맞는 한국어 번역 ZIP을 먼저 적용하세요.\n"
+                "② 사용 중인 게임·모드 폴더를 선택하세요.\n"
+                "③ '설치하기'를 누른 뒤 기존 게임 실행기로 실행하세요.\n\n"
+                "Steam 설치 폴더에도 바로 설치할 수 있습니다. 시험용 복사본 준비는 선택 사항입니다.\n"
+                "변경되는 파일은 자동 백업됩니다. 되돌리려면 같은 폴더를 선택하고 "
+                "'설치 전 상태로 복구'를 누르세요.", parent=self)
             return
         if self.experimental:
             messagebox.showinfo("독립 렌더러 시험판 안내",
