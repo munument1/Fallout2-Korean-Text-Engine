@@ -220,10 +220,23 @@ extern "C" __declspec(naked) void __cdecl NativeMonospaceCell() {
     }
 }
 
+// The character sheet has 18 skills in a fixed-height panel. Its list
+// and slider add one pixel to text_height(), while mouse hit-testing uses
+// the original roughly 11-pixel rows. Keep an 11-pixel font's full raster
+// height, but omit that extra gap in these three layout calculations.
+extern "C" __declspec(dllexport) int __cdecl KoreanTextHeightForCaller(uintptr_t caller) {
+    const int height = GetTextHeight();
+    if (height == 11 && (caller == 0x432A53 || caller == 0x436433 || caller == 0x436453))
+        return 10;
+    return height;
+}
+
 extern "C" __declspec(naked) void __cdecl NativeHeight() {
     __asm {
         pushad
-        call GetTextHeight
+        push dword ptr [esp+32]
+        call KoreanTextHeightForCaller
+        add esp, 4
         mov [esp+28], eax
         popad
         ret

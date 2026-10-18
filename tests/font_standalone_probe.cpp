@@ -28,6 +28,9 @@ int wmain(int argc, wchar_t** argv) {
     if (!init || !clear || !select || !getWidth || !getHeight ||
         !output || !split || !outputL || !outputX ||
         !wordWrap || !scopedWordWrap || !nativeWordWrap || !isUiKnob) return 4;
+    auto layoutHeight = reinterpret_cast<int(__cdecl*)(uintptr_t)>(
+        GetProcAddress(dll, "KoreanTextHeightForCaller"));
+    if (!layoutHeight) return 9;
     init();
     if (GetModuleHandleW(L"fallout2font_legacy.dll")) return 5;
     int failures = 0;
@@ -35,6 +38,18 @@ int wmain(int argc, wchar_t** argv) {
         select(id);
         int height = getHeight();
         printf("font=%d height=%d\n", id, height);
+        // The skill panel reserves 206 pixels for 18 rows. At size 11 the
+        // list and its slider must omit the game's extra one-pixel gap,
+        // while other layouts retain the full raster height.
+        if (layoutHeight(0x400000) != height || layoutHeight(0x436434) != height)
+            ++failures;
+        if (id == 101 && height == 11) {
+            for (auto caller : {uintptr_t(0x432A53), uintptr_t(0x436433), uintptr_t(0x436453)}) {
+                const int rowStep = layoutHeight(caller) + 1;
+                if (rowStep < height || 27 + 17 * rowStep + height > 233)
+                    ++failures;
+            }
+        }
         if (height < 6 || height > 64) ++failures;
         if (getWidth("Hello\r\n") != getWidth("Hello") || getWidth("\r") != 0) ++failures;
         // The vanilla UI's 0x95 marker has two forms: an isolated monitor
