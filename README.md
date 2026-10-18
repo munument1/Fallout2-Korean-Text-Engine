@@ -1,19 +1,23 @@
 # Fallout 2 한국어 출력 엔진
 
-## 독립형 한국어 엔진 — 정식판 v1.2.2
+## 독립형 한국어 엔진 — 정식판 v1.2.3
 
-**[독립형 Windows 설치기 v1.2.2 다운로드](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/tag/v1.2.2)**
+**[독립형 Windows 설치기 v1.2.3 다운로드](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/tag/v1.2.3)**
 
 사용자가 게임 폴더를 하나 선택하면 호환되는 Fallout 2 계열 실행 파일의 **Watcom ABI·PE 구조를 자동 검사**해 한국어 출력 기능을 설치합니다. 게임 종류·중국어 CJK EXE·글꼴 DLL 입력을 요구하지 않으며, EXE 전체 해시만 다른 호환 업데이트도 처리할 수 있습니다. ABI 자체가 바뀐 실행 파일은 안전하게 거부합니다.
 
 설치 순서는 **게임 버전과 일치하는 한국어 번역 ZIP을 먼저 적용 → 독립형 설치기 실행 → 기존 게임 런처 실행**입니다. **Steam을 포함한 기존 설치 폴더에 바로 설치할 수 있습니다.** 게임을 종료한 뒤 사용 중인 게임·모드 폴더를 선택하세요. 시험용 전체 복사본 준비는 선택 사항입니다. 수정 대상 원본 파일만 `korean_engine_backup_v2`에 자동 백업하며 같은 폴더에서 복구할 수 있습니다.
+
+기본 글꼴은 **본문 돋움 11**, **버튼 카페24 아네모네 에어 16·굵게**입니다. 버튼 글꼴과 공식 라이선스는 설치기에 포함됩니다. 본문에는 Windows의 돋움 글꼴을 사용합니다. 기술 목록의 마지막 줄과 선택 커서 간격을 조정했습니다.
+
+기존 엔진이 설치되어 있다면 같은 폴더를 선택해 **설치 전 상태로 복구**한 뒤 새 설치기로 다시 설치하세요.
 
 현재 번역 ZIP: [Nevada](https://github.com/munument1/Fallout2-Nevada-KR/releases/tag/v2026.10.17-native-beta.1) ·
 [Olympus 2207](https://github.com/munument1/Fallout2-Olympus2207-KR/releases/tag/v2026.10.17-native-beta.1) ·
 [Sonora 1.16.4/DLC 공통 번역](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v1.16.4-native-beta.2) ·
 [Et Tu 2.0.3911](https://github.com/munument1/Fallout2-EtTu-KR/releases/tag/v2.0.3911-native-beta.2) ·
 [RPU 2.4.34](https://github.com/munument1/Fallout2-RPU-KR/releases/tag/v2.4.34-native-beta.2).
-**Resurrection 1.5는 독립형 범용 엔진 설치 대상에서 제외합니다.** 구형 sfall과 고해상도 패치의 호환성 때문에 [기존 Resurrection KR1.1 정식 한국어 패치](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/Resurrection-V1.5-KR1.1)를 사용하세요. **v1.2.2 정식 설치기는 Resurrection의 런처·CFG·엔진 구성을 감지해 파일을 변경하기 전에 설치를 중단합니다.** 이전 beta.2는 이 차단 기능이 없으므로 Resurrection에 사용하지 마세요.
+**Resurrection 1.5는 독립형 범용 엔진 설치 대상에서 제외합니다.** 구형 sfall과 고해상도 패치의 호환성 때문에 [기존 Resurrection KR1.1 정식 한국어 패치](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/Resurrection-V1.5-KR1.1)를 사용하세요. **v1.2.3 정식 설치기는 Resurrection의 런처·CFG·엔진 구성을 감지해 파일을 변경하기 전에 설치를 중단합니다.** 이전 beta.2는 이 차단 기능이 없으므로 Resurrection에 사용하지 마세요.
 
 Sonora `eng_repack` 개발본은 [별도 자료](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v2026.10.17-native-beta.1)입니다. Et Tu와 RPU의 원본 업데이트는 아직 진행 중입니다.
 
@@ -60,4 +64,4 @@ Fallout 2 원본 / Restoration Project Updated / Fallout Et Tu / Fallout Sonora 
 
 [고급 설치·구조 설명](docs/TECHNICAL.md) · [게임별 검증 기록](docs/validation.json) · [테스트 안내](docs/TESTING.md) · [이전 CJK 방식 개발자용 ZIP](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/download/v1.0.0/korean-text-engine.zip)
 
-새 출력 어댑터 및 설치 도구는 MIT, Galmuri 글꼴은 OFL 라이선스를 따릅니다.
+새 출력 어댑터 및 설치 도구는 MIT, 동봉한 Galmuri와 카페24 글꼴은 각 배포 라이선스를 따릅니다. [카페24 공식 글꼴 안내](https://fonts.cafe24.com/). 돋움 글꼴 파일은 Windows에서 사용합니다.

@@ -28,6 +28,7 @@ struct Face {
 };
 Face faces[2];
 bool initialized = false;
+std::vector<std::wstring> privateFonts;
 
 void fail(const wchar_t* message) {
     MessageBoxW(nullptr, message, L"Korean font renderer", MB_ICONERROR);
@@ -131,9 +132,9 @@ void cleanup() {
         if (face.dc) DeleteDC(face.dc);
         face = Face{};
     }
-    for (auto name : {L"Galmuri9.ttf", L"Galmuri11.ttf"}) {
-        RemoveFontResourceExW((folder + L"fonts\\" + name).c_str(), FR_PRIVATE, nullptr);
-    }
+    for (const auto& file : privateFonts)
+        RemoveFontResourceExW(file.c_str(), FR_PRIVATE, nullptr);
+    privateFonts.clear();
     initialized = false;
 }
 
@@ -184,15 +185,30 @@ extern "C" void __cdecl InitFont() {
     int adjust = GetPrivateProfileIntW(L"MISC", L"Adjust", 0, ini.c_str());
     for (auto name : {L"Galmuri9.ttf", L"Galmuri11.ttf"}) {
         auto file = folder + L"fonts\\" + name;
-        if (GetFileAttributesW(file.c_str()) == INVALID_FILE_ATTRIBUTES ||
-            !AddFontResourceExW(file.c_str(), FR_PRIVATE, nullptr)) fail(L"Required Galmuri font missing.");
+        if (GetFileAttributesW(file.c_str()) != INVALID_FILE_ATTRIBUTES &&
+            AddFontResourceExW(file.c_str(), FR_PRIVATE, nullptr))
+            privateFonts.push_back(file);
     }
     for (int i = 0; i != 2; ++i) {
         auto section = i ? L"BUTTON" : L"TEXT";
         wchar_t name[128];
-        GetPrivateProfileStringW(section, L"Name", i ? L"Galmuri11" : L"Galmuri9", name, 128, ini.c_str());
-        int size = GetPrivateProfileIntW(section, L"Size", i ? 14 : 10, ini.c_str());
-        int weight = GetPrivateProfileIntW(section, L"Weight", i ? 600 : 400, ini.c_str());
+        GetPrivateProfileStringW(section, L"Name", i ? L"Cafe24 Ohsquare air Light" : L"Dotum", name, 128, ini.c_str());
+        wchar_t configuredFile[MAX_PATH]{};
+        GetPrivateProfileStringW(section, L"File", L"", configuredFile, MAX_PATH, ini.c_str());
+        if (configuredFile[0]) {
+            const std::wstring relative = configuredFile;
+            if (relative.front() == L'/' || relative.front() == L'\\' ||
+                relative.find(L':') != std::wstring::npos || relative.find(L"..") != std::wstring::npos)
+                fail(L"Font File must be a relative path inside the game folder.");
+            const auto file = folder + relative;
+            if (std::find(privateFonts.begin(), privateFonts.end(), file) == privateFonts.end()) {
+                if (!AddFontResourceExW(file.c_str(), FR_PRIVATE, nullptr))
+                    fail(L"Cannot load the bundled button font. Reinstall the Korean text engine.");
+                privateFonts.push_back(file);
+            }
+        }
+        int size = GetPrivateProfileIntW(section, L"Size", i ? 16 : 11, ini.c_str());
+        int weight = GetPrivateProfileIntW(section, L"Weight", i ? 700 : 400, ini.c_str());
         if (size < 6 || size > 64 || weight < 0 || weight > 1000) fail(L"Invalid font size/weight.");
         auto& face = faces[i];
         face.dc = CreateCompatibleDC(nullptr);
@@ -201,6 +217,11 @@ extern "C" void __cdecl InitFont() {
                                NONANTIALIASED_QUALITY, DEFAULT_PITCH, name);
         if (!face.dc || !face.font) fail(L"Cannot initialize raster font.");
         face.oldFont = SelectObject(face.dc, face.font);
+        if (configuredFile[0]) {
+            wchar_t actual[128]{};
+            if (!GetTextFaceW(face.dc, 128, actual) || _wcsicmp(actual, name) != 0)
+                fail(L"The bundled font could not be selected. Reinstall the Korean text engine.");
+        }
         TEXTMETRICW tm{};
         if (!GetTextMetricsW(face.dc, &tm)) fail(L"Cannot measure raster font.");
         face.height = tm.tmHeight;
@@ -256,6 +277,32 @@ extern "C" void __cdecl TextOutput(const char* s, int w, int pitch, unsigned cha
     PatBlt(face.dc, 0, 0, width, height, BLACKNESS);
     TextOutW(face.dc, 0, 0, text.data(), static_cast<int>(text.size()));
     GdiFlush();
+    // Some display fonts contain a blank bullet glyph. Preserve Fallout's
+    // monitor/option marker even when the selected face has no visible ink.
+    if (text.front() == L'\x2022' || text.front() == L'\x25cf') {
+        SIZE marker{};
+        GetTextExtentPoint32W(face.dc, text.data(), 1, &marker);
+        const int markerWidth = std::min(width, static_cast<int>(marker.cx));
+        const auto scan = static_cast<const DWORD*>(pixels);
+        bool hasInk = false;
+        for (int y = 0; y < height && !hasInk; ++y)
+            for (int x = 0; x < markerWidth; ++x)
+                if ((scan[static_cast<size_t>(y) * width + x] & 0x00ffffff) != 0) {
+                    hasInk = true;
+                    break;
+                }
+        if (!hasInk && markerWidth >= 2) {
+            const int diameter = std::min(markerWidth, std::max(2, std::min(5, height / 4)));
+            const int left = (markerWidth - diameter) / 2;
+            const int top = (height - diameter) / 2;
+            auto oldBrush = SelectObject(face.dc, GetStockObject(WHITE_BRUSH));
+            auto oldPen = SelectObject(face.dc, GetStockObject(WHITE_PEN));
+            Ellipse(face.dc, left, top, left + diameter, top + diameter);
+            SelectObject(face.dc, oldPen);
+            SelectObject(face.dc, oldBrush);
+            GdiFlush();
+        }
+    }
     int ink = mapColor(color);
     auto source = static_cast<const DWORD*>(pixels);
     for (int y = 0; y < height; ++y)

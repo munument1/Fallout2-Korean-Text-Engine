@@ -44,7 +44,7 @@ class NativeInstallRecoveryTests(unittest.TestCase):
             DIRECTORY_ENTRY_EXPORT=SimpleNamespace(symbols=symbols),
         )
 
-    def install(self):
+    def install(self, assets=None):
         with (mock.patch.object(engine.pefile, 'PE', return_value=self.fake_pe),
               mock.patch.object(engine, 'detect_native_executables',
                                 return_value={'fallout2.exe': self.original_exe}),
@@ -52,7 +52,7 @@ class NativeInstallRecoveryTests(unittest.TestCase):
               mock.patch.object(engine, 'inspect_sfall',
                                 return_value={'enabled': False, 'status': 'absent', 'hash': None}),
               mock.patch.object(native_pe, 'native_exe', return_value=self.patched_exe)):
-            return engine.install_native(self.args, self.game, {'assets': {}})
+            return engine.install_native(self.args, self.game, {'assets': assets or {}})
 
     def assert_clean_original(self):
         self.assertEqual((self.game / 'fallout2.exe').read_bytes(), self.original_exe)
@@ -79,6 +79,34 @@ class NativeInstallRecoveryTests(unittest.TestCase):
         for name, original in before.items():
             self.assertEqual((self.game / name).read_bytes(), original)
         self.assertFalse((self.game / 'fallout2font.dll').exists())
+
+    def test_bundled_button_font_and_license_restore(self):
+        from tools.runtime import sha
+        bundled = self.root / 'bundle'
+        names = ('fonts/Cafe24OhsquareAir-v2.0.ttf', 'fonts/Cafe24-OhsquareAir-LICENSE.pdf')
+        assets = {}
+        for name in names:
+            path = bundled / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(('bundled-' + name).encode('ascii'))
+            assets[name] = sha(path.read_bytes())
+        for existing in (False, True):
+            with self.subTest(existing=existing):
+                if existing:
+                    for name in names:
+                        path = self.game / name
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_bytes(b'previous-user-file')
+                with mock.patch.object(engine, 'ROOT', bundled):
+                    self.install(assets)
+                for name in names:
+                    self.assertEqual((self.game / name).read_bytes(), (bundled / name).read_bytes())
+                engine.restore(self.game, dry_run=False)
+                for name in names:
+                    if existing:
+                        self.assertEqual((self.game / name).read_bytes(), b'previous-user-file')
+                    else:
+                        self.assertFalse((self.game / name).exists())
 
     def test_backup_copy_failure_leaves_no_incomplete_backup(self):
         with mock.patch.object(engine.shutil, 'copy2', side_effect=OSError('backup I/O error')):

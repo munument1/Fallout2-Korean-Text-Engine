@@ -197,7 +197,8 @@ def restore(target, dry_run):
     allowed = {'fallout2.exe', 'Fallout2.exe', 'fallout2HR.exe', 'FSonoraDLC.exe', 'FSonora.exe', 'Nevada.exe', 'NevadaHD.exe', 'olympus.exe', 'FALLOUT2',
                'fallout2.cfg', 'Fallout2.cfg', 'Nevada.cfg', 'olympus.cfg', 'fores.cfg', 'ddraw.ini', 'f2_res.ini',
                'f2_res.dll', 'fallout2font.dll', 'fallout2font_legacy.dll', 'fallout2font.ini',
-               'fonts/Galmuri9.ttf', 'fonts/Galmuri11.ttf', 'fonts/Galmuri-LICENSE.txt'}
+               'fonts/Galmuri9.ttf', 'fonts/Galmuri11.ttf', 'fonts/Galmuri-LICENSE.txt',
+               'fonts/Cafe24OhsquareAir-v2.0.ttf', 'fonts/Cafe24-OhsquareAir-LICENSE.pdf'}
     # Native auto-detection also supports future mod EXE/CFG filenames.
     # Keep path characters tightly constrained, disallow nested directories
     # and verify the backed-up original against the genuine Watcom ABI below.
