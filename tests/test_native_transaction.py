@@ -44,10 +44,12 @@ class NativeInstallRecoveryTests(unittest.TestCase):
             DIRECTORY_ENTRY_EXPORT=SimpleNamespace(symbols=symbols),
         )
 
-    def install(self, assets=None):
+    def install(self, assets=None, executables=None):
+        if executables is None:
+            executables = {'fallout2.exe': self.original_exe}
         with (mock.patch.object(engine.pefile, 'PE', return_value=self.fake_pe),
               mock.patch.object(engine, 'detect_native_executables',
-                                return_value={'fallout2.exe': self.original_exe}),
+                                return_value=executables),
               mock.patch.object(engine, 'detect_native_config', return_value='fallout2.cfg'),
               mock.patch.object(engine, 'inspect_sfall',
                                 return_value={'enabled': False, 'status': 'absent', 'hash': None}),
@@ -133,6 +135,85 @@ class NativeInstallRecoveryTests(unittest.TestCase):
         self.assertEqual((self.game / 'fallout2.exe').read_bytes(), self.patched_exe)
         engine.restore(self.game, dry_run=False)
         self.assertEqual((self.game / 'fallout2.exe').read_bytes(), self.original_exe)
+
+    def seed_two_executables(self):
+        # Different originals must each retain their own backup, even though
+        # this transaction-only fixture mocks the PE patcher and ABI scan.
+        originals = {
+            'fallout2.exe': self.original_exe,
+            'fallout2HR.exe': b'original-game-with-hrp-bootstrap',
+        }
+        for name, data in originals.items():
+            (self.game / name).write_bytes(data)
+        for name in ('mods/rpu.dat', 'f2_res.dll', 'f2_res.ini',
+                     'data/SAVEGAME/SLOT01/SAVE.DAT'):
+            path = self.game / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(('preserve-' + name).encode('ascii'))
+        return originals
+
+    def snapshot(self):
+        return {p.relative_to(self.game): p.read_bytes()
+                for p in self.game.rglob('*') if p.is_file()}
+
+    def test_second_executable_failure_restores_both_originals_and_allows_retry(self):
+        originals = self.seed_two_executables()
+        before = self.snapshot()
+        real_atomic = engine.atomic
+        writes = []
+
+        def failing_atomic(path, data):
+            writes.append(path.name)
+            if path.name == 'fallout2HR.exe':
+                raise OSError('second executable is locked')
+            return real_atomic(path, data)
+
+        with mock.patch.object(engine, 'atomic', side_effect=failing_atomic):
+            with self.assertRaisesRegex(OSError, 'second executable is locked'):
+                self.install(executables=originals)
+        self.assertEqual(writes[:2], ['fallout2.exe', 'fallout2HR.exe'])
+        self.assertEqual(self.snapshot(), before)
+        self.assert_clean_original()
+
+        self.install(executables=originals)
+        for name, original in originals.items():
+            self.assertEqual((self.game / name).read_bytes(), self.patched_exe)
+            self.assertEqual((self.game / engine.BACKUP / name).read_bytes(), original)
+        engine.restore(self.game, dry_run=False)
+        for name, original in before.items():
+            self.assertEqual((self.game / name).read_bytes(), original)
+        self.assertFalse((self.game / 'fallout2font.dll').exists())
+
+    def test_changed_second_executable_blocks_restore_before_any_write(self):
+        self.install(executables=self.seed_two_executables())
+        (self.game / 'fallout2HR.exe').write_bytes(b'user-updated-hr-executable')
+        before = self.snapshot()
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run):
+                with self.assertRaisesRegex(ValueError, 'Installed file changed.*fallout2HR.exe'):
+                    engine.restore(self.game, dry_run=dry_run)
+                self.assertEqual(self.snapshot(), before)
+                self.assertEqual((self.game / 'fallout2.exe').read_bytes(), self.patched_exe)
+
+    def test_corrupt_second_executable_backup_blocks_restore_before_any_write(self):
+        self.install(executables=self.seed_two_executables())
+        (self.game / engine.BACKUP / 'fallout2HR.exe').write_bytes(b'corrupted-backup')
+        before = self.snapshot()
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run):
+                with self.assertRaisesRegex(ValueError, 'Recovery file hash mismatch'):
+                    engine.restore(self.game, dry_run=dry_run)
+                self.assertEqual(self.snapshot(), before)
+
+    def test_changed_font_blocks_two_executable_restore_before_any_write(self):
+        self.install(executables=self.seed_two_executables())
+        (self.game / 'fallout2font.dll').write_bytes(b'user-replaced-font-dll')
+        before = self.snapshot()
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run):
+                with self.assertRaisesRegex(ValueError, 'Installed file changed.*fallout2font.dll'):
+                    engine.restore(self.game, dry_run=dry_run)
+                self.assertEqual(self.snapshot(), before)
 
     def test_rejects_changed_executable_before_backup(self):
         changed = b'updated-during-scan'
