@@ -1,8 +1,10 @@
 # Fallout 2 한국어 출력 엔진
 
-## 독립형 한국어 엔진 — 정식판 v1.2.3
+## 독립형 한국어 엔진 — 정식판 v1.2.4
 
-**[독립형 Windows 설치기 v1.2.3 다운로드](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/tag/v1.2.3)**
+v1.2.4는 공식 sfall 4.5.1의 RPU 인종·외형 설명이 한글을 한 바이트씩 계산하던 별도 줄바꿈 경로를 수정합니다. [수정 및 검증 범위](docs/RELEASE_NOTES_V1_2_4.md). 영상 자막 누락은 [RPU 번역 native.2](https://github.com/munument1/Fallout2-RPU-KR/releases/tag/v2.4.34-native.2)도 함께 적용해야 합니다.
+
+**[독립형 Windows 설치기 v1.2.4 다운로드](https://github.com/munument1/Fallout2-Korean-Text-Engine/releases/tag/v1.2.4)**
 
 사용자가 게임 폴더를 하나 선택하면 호환되는 Fallout 2 계열 실행 파일의 **Watcom ABI·PE 구조를 자동 검사**해 한국어 출력 기능을 설치합니다. 게임 종류·중국어 CJK EXE·글꼴 DLL 입력을 요구하지 않으며, EXE 전체 해시만 다른 호환 업데이트도 처리할 수 있습니다. ABI 자체가 바뀐 실행 파일은 안전하게 거부합니다.
 
@@ -17,7 +19,7 @@
 [Sonora 1.16.4/DLC 공통 번역](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v1.16.4-native-beta.2) ·
 [Et Tu 2.0.3911](https://github.com/munument1/Fallout2-EtTu-KR/releases/tag/v2.0.3911-native-beta.2) ·
 [RPU 2.4.34](https://github.com/munument1/Fallout2-RPU-KR/releases/tag/v2.4.34-native-beta.2).
-**Resurrection 1.5는 독립형 범용 엔진 설치 대상에서 제외합니다.** 구형 sfall과 고해상도 패치의 호환성 때문에 [기존 Resurrection KR1.1 정식 한국어 패치](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/Resurrection-V1.5-KR1.1)를 사용하세요. **v1.2.3 정식 설치기는 Resurrection의 런처·CFG·엔진 구성을 감지해 파일을 변경하기 전에 설치를 중단합니다.** 이전 beta.2는 이 차단 기능이 없으므로 Resurrection에 사용하지 마세요.
+**Resurrection 1.5는 독립형 범용 엔진 설치 대상에서 제외합니다.** 구형 sfall과 고해상도 패치의 호환성 때문에 [기존 Resurrection KR1.1 정식 한국어 패치](https://github.com/munument1/Fallout-1.5-Resurrection-KR/releases/tag/Resurrection-V1.5-KR1.1)를 사용하세요. **v1.2.4 정식 설치기는 Resurrection의 런처·CFG·엔진 구성을 감지해 파일을 변경하기 전에 설치를 중단합니다.** 이전 beta.2는 이 차단 기능이 없으므로 Resurrection에 사용하지 마세요.
 
 Sonora `eng_repack` 개발본은 [별도 자료](https://github.com/munument1/Fallout2-Sonora-KR/releases/tag/v2026.10.17-native-beta.1)입니다. Et Tu와 RPU의 원본 업데이트는 아직 진행 중입니다.
 

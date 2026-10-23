@@ -17,6 +17,7 @@ extern "C" int __cdecl GetTextWidth(const char*);
 extern "C" int __cdecl GetTextHeight();
 extern "C" void __cdecl TextOutput(const char*, int, int, BYTE*, int);
 extern "C" int __cdecl IsGameUiKnobPrefix(const char*, int);
+extern "C" void __cdecl InstallKoreanAppearanceHook();
 
 namespace {
 constexpr uintptr_t kGameBase = 0x400000;
@@ -346,6 +347,7 @@ extern "C" __declspec(dllexport) void __cdecl InitKoreanEngine() {
     if (!inGame()) return;
     if (InterlockedCompareExchange(&installed, 1, 0) != 0) return;
     InitFont();
+    InstallKoreanAppearanceHook();
     FontManager* source = reinterpret_cast<FontManager*>(kModernManager);
     if (source->minFont != 100 || source->maxFont != 110 ||
         reinterpret_cast<uintptr_t>(source->setCurrent) != kOriginalSetCurrent) {
