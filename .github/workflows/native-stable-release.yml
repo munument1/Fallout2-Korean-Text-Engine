@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: munument1/Fallout2-RPU-KR
-          ref: c36810c
+          ref: c36810c6f3c6f0a5e79831144d85909df7b2d540
           path: appearance-regression
           sparse-checkout: appearance
       - name: Install pinned build dependencies
@@ -131,3 +131,4 @@ jobs:
           }
           gh release create $tag "dist/Fallout2-Korean-Native-Setup.exe" "dist/Independent-Korean-Native-Font.zip" "dist/SHA256SUMS.txt" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "Fallout 2 Korean Text Engine v1.2.4" --notes-file "docs/RELEASE_NOTES_V1_2_4.md" --latest
           if ($LASTEXITCODE -ne 0) { throw "Stable v1.2.4 publication failed" }
+
