@@ -1,0 +1,33 @@
+name: One-time remove superseded Korean engine PR branches
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cleanup-superseded-native-pr-branches-once.yml'
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    if: github.repository == 'munument1/Fallout2-Korean-Text-Engine'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const items=[{"branch":"release/v1.1.0-beta.1","sha":"1da853732b52cd075d1f825dccf4c7837f240f3a"},{"branch":"feature/auto-sfall-extracrc-beta2","sha":"991763ed580999c72c959ffb34ae4f4d3900fdb3"},{"branch":"feature/selfcontained-korean-engine","sha":"ddef71d03507b26921ce70aeca3d7cd603f78ba2"},{"branch":"feature/native-rpu-autodetect","sha":"a161641eb3b4448a54d851e22e4feb8c87ad3402"},{"branch":"feature/native-structural-autodetect","sha":"1ad479957c07ab1dca803ff11c57f8eb9a939ed7"}];
+            const owner=context.repo.owner,repo=context.repo.repo;
+            if(owner!=='munument1'||repo!=='Fallout2-Korean-Text-Engine'||context.ref!=='refs/heads/main')throw Error('Wrong repository/ref');
+            const open=await github.paginate(github.rest.pulls.list,{owner,repo,state:'open',per_page:100});
+            const blocked=new Set(open.flatMap(p=>[p.base.ref,p.head.ref]));
+            let deleted=0;const skipped=[];
+            for(const x of items){
+             if(blocked.has(x.branch)||x.branch==='main'){skipped.push(x.branch+' active PR');continue;}
+             const b=(await github.rest.repos.getBranch({owner,repo,branch:x.branch})).data;
+             if(b.protected||b.commit.sha!==x.sha){skipped.push(x.branch+' changed/protected');continue;}
+             const cmp=(await github.rest.repos.compareCommitsWithBasehead({owner,repo,basehead:'main...'+x.branch})).data;
+             if(cmp.ahead_by!==0){skipped.push(x.branch+' has unique commits');continue;}
+             await github.rest.git.deleteRef({owner,repo,ref:'heads/'+x.branch});deleted++;core.info('DELETED '+x.branch);
+            }
+            for(const x of skipped)core.warning('SKIPPED '+x);
+            core.info('Cleaned '+deleted+' of '+items.length+' superseded branches');
+            await core.summary.addHeading('Superseded PR branch cleanup').addRaw('Deleted '+deleted+' of '+items.length+'; preserved all current open PR branches.').write();
