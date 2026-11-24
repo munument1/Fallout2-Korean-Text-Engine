@@ -18,8 +18,11 @@ import pefile
 STOCK_SHA256 = "581c09c20fee70edc09ec412ee034e62e89cdefa13092e534ddd17d23f8163cb"
 RPU_HRP_SHA256 = "048684f802b05859e2b160fa358be1b99075bf31b49a312a536645581aa16b5f"
 SUPPORTED_NATIVE_SHA256 = frozenset({STOCK_SHA256, RPU_HRP_SHA256})
+OLYMPUS_12_SHA256 = "80b2b1c34a35b2592f6fa3155b5522c2235a060c6e6adc3c2a8fa40f7c8db587"
 HOOK_VA = 0x4CAF22
+OLYMPUS_HOOK_VA = 0x480CDE
 ORIGINAL_INSTRUCTION = bytes.fromhex("a334e45100")  # mov [0x51e434],eax
+OLYMPUS_INSTRUCTION = bytes.fromhex("833ddc94510000")  # cmp dword ptr [0x5194dc],0
 BOOT_VA = 0x6F0480
 IAT_LOADLIBRARYA = 0x6C020C
 IAT_GETPROCADDRESS = 0x6C01FC
@@ -42,7 +45,7 @@ def _align(value, alignment):
     return (value + alignment - 1) // alignment * alignment
 
 
-def _startup_stub(boot_va=BOOT_VA, hook_va=HOOK_VA):
+def _startup_stub(boot_va=BOOT_VA, hook_va=HOOK_VA, instruction=ORIGINAL_INSTRUCTION):
     section = bytearray(0x1000)
     dll_va = boot_va + 0x180
     func_va = boot_va + 0x1A0
@@ -66,9 +69,9 @@ def _startup_stub(boot_va=BOOT_VA, hook_va=HOOK_VA):
     emit(b"\xff\xd0")               # call eax (cdecl, no params)
     restore = len(code)
     emit(b"\x61\x9d")               # popad; popfd
-    emit(ORIGINAL_INSTRUCTION)
+    emit(instruction)
     jumpback = boot_va + len(code)
-    emit(b"\xe9" + struct.pack("<i", hook_va + 5 - (jumpback + 5)))
+    emit(b"\xe9" + struct.pack("<i", hook_va + len(instruction) - (jumpback + 5)))
     for branch in (fail1, fail2):
         displacement = restore - (branch + 2)
         if not -128 <= displacement <= 127:
@@ -132,8 +135,14 @@ def inspect_native_exe(original):
            for entry in module.imports if entry.name}
     if iat.get("LoadLibraryA") != IAT_LOADLIBRARYA or iat.get("GetProcAddress") != IAT_GETPROCADDRESS:
         raise ValueError("Original Win32 imports do not match bootstrap assumptions.")
-    offset = pe.get_offset_from_rva(HOOK_VA - pe.OPTIONAL_HEADER.ImageBase)
-    if original[offset:offset + 5] != ORIGINAL_INSTRUCTION:
+    # Olympus's external HRP creates the window before the standard window hook.
+    # Use the successful game initialization path before the intro and menus.
+    if hashlib.sha256(original).hexdigest() == OLYMPUS_12_SHA256:
+        hook_va, instruction = OLYMPUS_HOOK_VA, OLYMPUS_INSTRUCTION
+    else:
+        hook_va, instruction = HOOK_VA, ORIGINAL_INSTRUCTION
+    offset = pe.get_offset_from_rva(hook_va - pe.OPTIONAL_HEADER.ImageBase)
+    if original[offset:offset + len(instruction)] != instruction:
         raise ValueError("Original game startup instructions differ.")
 
     sec = pe.sections[-1]
@@ -147,18 +156,20 @@ def inspect_native_exe(original):
         raise ValueError("No safe room for native section header.")
 
     boot_va = pe.OPTIONAL_HEADER.ImageBase + virt + 0x480
-    return {"virt": virt, "physical": physical, "boot_va": boot_va}
+    return {"virt": virt, "physical": physical, "boot_va": boot_va,
+            "hook_va": hook_va, "hook_offset": offset, "instruction": instruction}
 
 
 def native_exe(original):
     """Patch structurally verified 1.02d-family game with an isolated loader."""
     plan = inspect_native_exe(original)
     pe = pefile.PE(data=original)
-    offset = pe.get_offset_from_rva(HOOK_VA - pe.OPTIONAL_HEADER.ImageBase)
+    offset = plan["hook_offset"]
     new_header_offset = pe.sections[0].get_file_offset() + len(pe.sections) * 40
     result = bytearray(original)
     result.extend(b"\0" * (plan["physical"] - len(result)))
-    result.extend(_startup_stub(boot_va=plan["boot_va"]))
+    instruction = plan["instruction"]
+    result.extend(_startup_stub(plan["boot_va"], plan["hook_va"], instruction))
     header = bytearray(40)
     header[:8] = b".krinit\0"
     struct.pack_into("<IIII", header, 8, 0x1000, plan["virt"], 0x1000, plan["physical"])
@@ -169,7 +180,8 @@ def native_exe(original):
     # Jump into our independently authored loader. Classic 1.02d has the
     # familiar versionCHI-compatible displacement; enlarged resource sections
     # require a different displacement and are verified by the DLL dynamically.
-    result[offset:offset + 5] = b"\xE9" + struct.pack("<i", plan["boot_va"] - (HOOK_VA + 5))
+    displacement = plan["boot_va"] - (plan["hook_va"] + 5)
+    result[offset:offset + len(instruction)] = b"\xE9" + struct.pack("<i", displacement) + b"\x90" * (len(instruction) - 5)
     checked = pefile.PE(data=result)
     if checked.sections[-1].Name.rstrip(b"\0") != b".krinit":
         raise ValueError("Native section missing after patch.")

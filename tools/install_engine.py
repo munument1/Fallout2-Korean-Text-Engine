@@ -16,6 +16,7 @@ else:
 
 ROOT = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
 BACKUP = 'korean_engine_backup_v2'
+STOCK_EXE_SIZE = 1189888
 RESURRECTION_LEGACY_PATCH = (
     'https://github.com/munument1/Fallout-1.5-Resurrection-KR/'
     'releases/tag/Resurrection-V1.5-KR1.1'
@@ -418,6 +419,8 @@ def install_native(args, target, manifest):
     sfall_hash = sfall['hash']
     crcs = []
     if sfall['enabled']:
+        # Extended sfall can list the stock US executable size even when the mod ships only its own EXE.
+        allowed_sizes = (STOCK_EXE_SIZE, *(len(data) for data in original_exes.values()))
         ini_path = checked_destination(target, 'ddraw.ini')
         current_ini = ini_path.read_bytes()
         text, encoding = decode_ini(current_ini)
@@ -427,7 +430,7 @@ def install_native(args, target, manifest):
             if crc not in crcs:
                 crcs.append(crc)
                 updated = ensure_sfall_crc(updated, crc,
-                                           allowed_size_tokens=(len(data) for data in original_exes.values()))
+                                           allowed_size_tokens=allowed_sizes)
         if updated.encode(encoding) != current_ini:
             payload['ddraw.ini'] = updated.encode(encoding)
     cfg_path = checked_destination(target, config_name)

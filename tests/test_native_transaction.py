@@ -44,15 +44,17 @@ class NativeInstallRecoveryTests(unittest.TestCase):
             DIRECTORY_ENTRY_EXPORT=SimpleNamespace(symbols=symbols),
         )
 
-    def install(self, assets=None):
+    def install(self, assets=None, *, sfall_enabled=False):
         with (mock.patch.object(engine.pefile, 'PE', return_value=self.fake_pe),
               mock.patch.object(engine, 'detect_native_executables',
                                 return_value={'fallout2.exe': self.original_exe}),
               mock.patch.object(engine, 'detect_native_config', return_value='fallout2.cfg'),
               mock.patch.object(engine, 'inspect_sfall',
-                                return_value={'enabled': False, 'status': 'absent', 'hash': None}),
+                                return_value={'enabled': sfall_enabled, 'status': 'test', 'hash': None}),
               mock.patch.object(native_pe, 'native_exe', return_value=self.patched_exe)):
-            return engine.install_native(self.args, self.game, {'assets': assets or {}})
+            return engine.install_native(self.args, self.game, {
+                'assets': assets or {}, 'crc_table': [0] * 256,
+            })
 
     def assert_clean_original(self):
         self.assertEqual((self.game / 'fallout2.exe').read_bytes(), self.original_exe)
@@ -79,6 +81,18 @@ class NativeInstallRecoveryTests(unittest.TestCase):
         for name, original in before.items():
             self.assertEqual((self.game / name).read_bytes(), original)
         self.assertFalse((self.game / 'fallout2font.dll').exists())
+
+    def test_native_install_preserves_stock_size_in_extended_sfall(self):
+        self.original_exe = bytes(1483776)
+        (self.game / 'fallout2.exe').write_bytes(self.original_exe)
+        ini = self.game / 'ddraw.ini'
+        ini.write_bytes(b'[Debugging]\r\nExtraCRC=0xF8D4E950,1189888,1483776\r\nSkipSizeCheck=1\r\n')
+        self.args.dry_run = True
+
+        report = self.install(sfall_enabled=True)
+
+        self.assertTrue(report['sfall_crc_added'])
+        self.assertIn(b'1189888,1483776', ini.read_bytes())
 
     def test_bundled_button_font_and_license_restore(self):
         from tools.runtime import sha

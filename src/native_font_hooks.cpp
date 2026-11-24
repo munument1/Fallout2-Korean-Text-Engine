@@ -21,6 +21,8 @@ extern "C" void __cdecl InstallKoreanAppearanceHook();
 
 namespace {
 constexpr uintptr_t kGameBase = 0x400000;
+constexpr uintptr_t kStartupHook = 0x4CAF22;
+constexpr uintptr_t kOlympusStartupHook = 0x480CDE;
 constexpr uintptr_t kModernManager = 0x518688;
 constexpr uintptr_t kRegisteredManagers = 0x6ADBD0;
 constexpr uintptr_t kRegisteredCount = 0x51E3B4;
@@ -28,6 +30,8 @@ constexpr uintptr_t kCurrentFont = 0x51E3B0;
 constexpr uintptr_t kGlobalFontCallbacks = 0x51E3B8;
 constexpr uintptr_t kOriginalSetCurrent = 0x442120;
 constexpr uintptr_t kOriginalWordWrap = 0x4BC6F0;
+constexpr uintptr_t kScriptWindowSetFont = 0x4B6128;
+constexpr uintptr_t kScriptFormatWrapCall = 0x4B89FF;
 constexpr unsigned char kWordWrapPrologue[] = {0x56, 0x57, 0x55, 0x83, 0xEC, 0x0C};
 
 struct FontManager {
@@ -88,7 +92,7 @@ int __cdecl monoCharacterWidth() {
     return GetTextWidth("\xB0\xA1");
 }
 
-bool inGame() {
+bool inGame(bool& olympus) {
     auto* image = reinterpret_cast<const BYTE*>(kGameBase);
     if (*reinterpret_cast<const WORD*>(image) != IMAGE_DOS_SIGNATURE) return false;
     auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image);
@@ -104,12 +108,16 @@ bool inGame() {
     const auto& nativeSection = sections[6];
     if (std::memcmp(nativeSection.Name, ".krinit", 7) != 0 ||
         nativeSection.Misc.VirtualSize != 0x1000 ||
-        nativeSection.SizeOfRawData != 0x1000 ||
-        *reinterpret_cast<const BYTE*>(0x4CAF22) != 0xE9)
+        nativeSection.SizeOfRawData != 0x1000)
         return false;
-    const int32_t displacement = *reinterpret_cast<const int32_t*>(0x4CAF23);
-    const uintptr_t target = 0x4CAF27 + displacement;
-    return target == kGameBase + nativeSection.VirtualAddress + 0x480 &&
+    const uintptr_t target = kGameBase + nativeSection.VirtualAddress + 0x480;
+    const auto jumpsToLoader = [target](uintptr_t hook) {
+        if (*reinterpret_cast<const BYTE*>(hook) != 0xE9) return false;
+        const int32_t displacement = *reinterpret_cast<const int32_t*>(hook + 1);
+        return hook + 5 + displacement == target;
+    };
+    olympus = jumpsToLoader(kOlympusStartupHook);
+    return (olympus || jumpsToLoader(kStartupHook)) &&
            *reinterpret_cast<const WORD*>(target) == 0x609c;
 }
 
@@ -123,16 +131,16 @@ bool writeManager(FontManager* manager, FontManager const& replacement) {
     return true;
 }
 
-bool installWordWrapHook(void* callback) {
-    auto* function = reinterpret_cast<BYTE*>(kOriginalWordWrap);
-    // Other hooks or different game builds may alter this function.
-    // Never force-install over an unfamiliar prologue.
-    if (std::memcmp(function, kWordWrapPrologue, sizeof(kWordWrapPrologue)) != 0)
+bool installBranch(uintptr_t address, const BYTE* prologue, size_t size, void* callback,
+                   BYTE opcode = 0xE9) {
+    auto* function = reinterpret_cast<BYTE*>(address);
+    // Leave unfamiliar game builds and other hooks alone.
+    if (std::memcmp(function, prologue, size) != 0)
         return false;
     DWORD old = 0;
     if (!VirtualProtect(function, 5, PAGE_EXECUTE_READWRITE, &old))
         return false;
-    BYTE jump[5] = {0xE9};
+    BYTE jump[5] = {opcode};
     auto from = reinterpret_cast<uintptr_t>(function) + sizeof(jump);
     auto to = reinterpret_cast<uintptr_t>(callback);
     *reinterpret_cast<int32_t*>(&jump[1]) = static_cast<int32_t>(to - from);
@@ -343,8 +351,102 @@ extern "C" __declspec(dllexport, naked) void __cdecl NativeWordWrap() {
     }
 }
 
+// Olympus hint windows select GNW font 3 through the script window API.
+// Use the small Korean face there while preserving the legacy game font.
+__declspec(naked) void __cdecl OlympusScriptWindowSetFont() {
+    __asm {
+        pushfd
+        cmp eax, 3
+        jne keepFont
+        mov eax, 101
+    keepFont:
+        popfd
+        push edx
+        mov edx, 0672D90h
+        mov [edx], eax
+        pop edx
+        push 04B612Dh
+        ret
+    }
+}
+
+// The script formatter measures individual bytes, which undercounts CP949
+// text. Keep the original painter, bounds, color and alignment.
+void __cdecl PaintScriptWindowLine(int win, const char* text, int textLength, int width,
+                                  int bottom, int x, int y, int flags, int alignment) {
+    __asm {
+        push alignment
+        push flags
+        push y
+        push x
+        push bottom
+        mov eax, win
+        mov edx, text
+        mov ebx, textLength
+        mov ecx, width
+        mov esi, 04B8414h
+        call esi
+    }
+}
+
+int __cdecl FormatOlympusWindow(int win, const char* text, int width, int height,
+                                int x, int y, int flags, int alignment, int spacing) {
+    if (*reinterpret_cast<const int*>(kCurrentFont) != 101 || !text || width <= 0)
+        return 0;
+    bool multibyte = false;
+    for (auto byte = reinterpret_cast<const BYTE*>(text); *byte; ++byte) {
+        if (IsDBCSLeadByteEx(949, *byte)) {
+            multibyte = true;
+            break;
+        }
+    }
+    if (!multibyte) return 0;
+
+    short positions[64];
+    short count;
+    if (KoreanWordWrap(text, width, positions, &count) != 0)
+        return 0;
+    const int step = GetTextHeight() + spacing;
+    for (int i = 0; i + 1 < count; ++i) {
+        const char* start = text + positions[i];
+        const char* end = text + positions[i + 1];
+        while (start < end && (end[-1] == '\r' || end[-1] == '\n' || end[-1] == ' '))
+            --end;
+        PaintScriptWindowLine(win, start, static_cast<int>(end - start), width,
+                              height + y, x, y + i * step, flags, alignment);
+    }
+    return 1;
+}
+
+__declspec(naked) void __cdecl OlympusScriptFormatWrap() {
+    __asm {
+        pushad
+        mov ebp, esp
+        push dword ptr [ebp+52] // spacing
+        push dword ptr [ebp+48] // alignment
+        push dword ptr [ebp+44] // flags
+        push dword ptr [ebp+40] // y
+        push dword ptr [ebp+36] // x
+        push dword ptr [ebp+24] // height (ECX)
+        push dword ptr [ebp+16] // width (EBX)
+        push dword ptr [ebp+20] // text (EDX)
+        push dword ptr [ebp+28] // window (EAX)
+        call FormatOlympusWindow
+        add esp, 36
+        test eax, eax
+        jz original
+        popad
+        ret 20
+    original:
+        popad
+        push 04B8854h
+        ret
+    }
+}
+
 extern "C" __declspec(dllexport) void __cdecl InitKoreanEngine() {
-    if (!inGame()) return;
+    bool olympus = false;
+    if (!inGame(olympus)) return;
     if (InterlockedCompareExchange(&installed, 1, 0) != 0) return;
     InitFont();
     InstallKoreanAppearanceHook();
@@ -397,6 +499,17 @@ extern "C" __declspec(dllexport) void __cdecl InitKoreanEngine() {
         }
     }
     OutputDebugStringA("Fallout2 Korean Engine: registered native Watcom font adapter\n");
-    if (!installWordWrapHook(reinterpret_cast<void*>(&NativeWordWrap)))
+    if (!installBranch(kOriginalWordWrap, kWordWrapPrologue, sizeof(kWordWrapPrologue),
+                     reinterpret_cast<void*>(&NativeWordWrap)))
         OutputDebugStringA("Fallout2 Korean Engine: word wrapping hook was not installed\n");
+    if (olympus) {
+        constexpr BYTE prologue[] = {0xA3, 0x90, 0x2D, 0x67, 0x00};
+        if (!installBranch(kScriptWindowSetFont, prologue, sizeof(prologue),
+                         reinterpret_cast<void*>(&OlympusScriptWindowSetFont)))
+            OutputDebugStringA("Fallout2 Korean Engine: Olympus script window font hook was not installed\n");
+        constexpr BYTE wrapCall[] = {0xE8, 0x50, 0xFE, 0xFF, 0xFF};
+        if (!installBranch(kScriptFormatWrapCall, wrapCall, sizeof(wrapCall),
+                           reinterpret_cast<void*>(&OlympusScriptFormatWrap), 0xE8))
+            OutputDebugStringA("Fallout2 Korean Engine: Olympus script window wrap hook was not installed\n");
+    }
 }

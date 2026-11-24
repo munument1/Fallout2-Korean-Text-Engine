@@ -9,6 +9,7 @@ import pefile
 from tools.native_pe import (
     _startup_stub, native_exe, inspect_native_exe, HOOK_VA, BOOT_VA,
     IAT_GETPROCADDRESS, IAT_LOADLIBRARYA, STOCK_SHA256, RPU_HRP_SHA256,
+    OLYMPUS_HOOK_VA, OLYMPUS_INSTRUCTION,
 )
 from tools.runtime import sfall_crc
 
@@ -24,6 +25,14 @@ class NativePEUnitTests(unittest.TestCase):
         self.assertIn(b"InitKoreanEngine\x00", code)
         self.assertNotIn(b"fallout2font_legacy.dll", code)
         self.assertNotIn(b"FO2_UPU_CHT", code)
+
+    def test_olympus_loader_replays_full_instruction_before_resuming(self):
+        code = _startup_stub(BOOT_VA, OLYMPUS_HOOK_VA, OLYMPUS_INSTRUCTION)
+        jump = code.index(OLYMPUS_INSTRUCTION, 0x480) + len(OLYMPUS_INSTRUCTION)
+        self.assertEqual(code[jump], 0xE9)
+        displacement = struct.unpack_from("<i", code, jump + 1)[0]
+        self.assertEqual(BOOT_VA + jump - 0x480 + 5 + displacement,
+                         OLYMPUS_HOOK_VA + len(OLYMPUS_INSTRUCTION))
 
     def test_non_stock_input_rejected(self):
         for raw in (b"", b"MZ" + b"\0" * 4096, b"not executable"):
